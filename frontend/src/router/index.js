@@ -728,6 +728,23 @@ const routes = [
       }
     ]
   },
+  // 缺陷与发布门禁路由
+  {
+    path: '/defects',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        redirect: 'quality-gate'
+      },
+      {
+        path: 'quality-gate',
+        name: 'QualityGate',
+        component: () => import('@/views/defects/QualityGateView.vue')
+      }
+    ]
+  },
   // ====== 知识中枢（2026-07-24 v3.1：下沉为配置中心的二级折叠子菜单）======
   // 顶层只保留一条旧链接兜底 redirect，所有子路由挂在 /configuration/knowledge-hub 下
   {

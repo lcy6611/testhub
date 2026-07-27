@@ -34,11 +34,17 @@ class TestCaseSerializer(serializers.ModelSerializer):
     step_details = TestCaseStepSerializer(many=True, read_only=True)
     attachments = TestCaseAttachmentSerializer(many=True, read_only=True)
     comments = TestCaseCommentSerializer(many=True, read_only=True)
-    
+    requirement_detail = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = TestCase
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_requirement_detail(self, obj):
+        if obj.requirement_id:
+            return {'id': obj.requirement_id, 'name': obj.requirement.requirement_name}
+        return None
 
 class TestCaseCreateSerializer(serializers.ModelSerializer):
     project_id = serializers.IntegerField(required=False, allow_null=True, help_text="项目ID，可选")
@@ -53,7 +59,8 @@ class TestCaseCreateSerializer(serializers.ModelSerializer):
         model = TestCase
         fields = [
             'title', 'description', 'preconditions', 'steps', 'expected_result', 
-            'priority', 'status', 'test_type', 'tags', 'project_id', 'version_ids'
+            'priority', 'status', 'test_type', 'tags', 'project_id', 'version_ids',
+            'requirement_id'
         ]
     
     def create(self, validated_data):
@@ -82,7 +89,8 @@ class TestCaseUpdateSerializer(serializers.ModelSerializer):
         model = TestCase
         fields = [
             'title', 'description', 'preconditions', 'steps', 'expected_result', 
-            'priority', 'status', 'test_type', 'tags', 'project_id', 'version_ids'
+            'priority', 'status', 'test_type', 'tags', 'project_id', 'version_ids',
+            'requirement_id'
         ]
     
     def update(self, instance, validated_data):

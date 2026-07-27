@@ -39,6 +39,12 @@ class TestCase(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='状态')
     test_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='functional', verbose_name='测试类型')
     tags = models.JSONField(default=list, verbose_name='标签')
+    # ===== #260 需求→缺陷闭环：打通"需求↔中央用例"断裂点 =====
+    requirement = models.ForeignKey(
+        'requirement_analysis.BusinessRequirement',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='exec_testcases', verbose_name='关联需求'
+    )
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='authored_testcases', verbose_name='作者')
     assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_testcases', verbose_name='指派人')
     created_at = models.DateTimeField(default=timezone.now, verbose_name='创建时间')

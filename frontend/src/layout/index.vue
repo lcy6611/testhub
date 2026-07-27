@@ -390,6 +390,14 @@
               <span>内网文件传输</span>
             </el-menu-item>
           </template>
+
+          <!-- 缺陷与发布门禁模块菜单 -->
+          <template v-else-if="currentModule === 'defects'">
+            <el-menu-item index="/defects/quality-gate">
+              <el-icon><Warning /></el-icon>
+              <span>发布门禁</span>
+            </el-menu-item>
+          </template>
         </el-menu>
 
         <!-- Hermes 数字人形象（仅在 Hermes 模块显示；位于 el-menu 之下，高度自适应不溢出） -->
@@ -471,7 +479,7 @@ import {
   Monitor, Folder, Document, Flag, Check, Collection, VideoPlay,
   DataAnalysis, ChatDotRound, DocumentCopy, Link, MagicStick,
   Odometer, Timer, Setting, AlarmClock, Bell, Aim, Edit, Cpu, DataLine, Files,
-  Reading, HomeFilled, DataBoard
+  Reading, HomeFilled, DataBoard, Warning
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -540,6 +548,7 @@ const currentModule = computed(() => {
   if (route.path.startsWith('/configuration')) return 'configuration'
   if (route.path.startsWith('/performance-testing')) return 'performance-testing'
   if (route.path.startsWith('/ops-tools')) return 'ops-tools'
+  if (route.path.startsWith('/defects')) return 'defects'
   return ''
 })
 
@@ -553,7 +562,8 @@ const moduleName = computed(() => {
     'ai-intelligent-mode': 'AI 智能模式',
     'configuration': '配置中心',
     'performance-testing': '性能测试',
-    'ops-tools': '运维工具'
+    'ops-tools': '运维工具',
+    'defects': '质量门禁'
   }
   return map[currentModule.value] || ''
 })
@@ -672,6 +682,8 @@ const breadcrumbTitle = computed(() => {
     '/ops-tools/logs': '日志查询',
     '/ops-tools/text2sql': 'Text2SQL',
     '/ops-tools/files': '内网文件传输',
+
+    '/defects/quality-gate': '发布门禁',
 
     '/profile': '个人设置'
   }

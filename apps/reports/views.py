@@ -60,14 +60,12 @@ class TestReportViewSet(viewsets.ModelViewSet):
             
         pass_rate = round((total_passed / total_executed * 100), 1) if total_executed > 0 else 0
         
-        # 统计缺陷总数 (基于 TestRunCase 的 defects 字段)
-        all_runs = TestRun.objects.filter(test_plan__in=plans_qs)
-        defects_count = 0
-        for run in all_runs:
-            run_cases_with_defects = run.run_cases.exclude(defects=[])
-            for rc in run_cases_with_defects:
-                if isinstance(rc.defects, list):
-                    defects_count += len(rc.defects)
+        # 统计缺陷总数 (基于真实缺陷实体 apps.defects)
+        from apps.defects.models import Defect
+        if project_id:
+            defects_count = Defect.objects.filter(project_id=int(project_id)).count()
+        else:
+            defects_count = Defect.objects.count()
         
         return Response({
             'active_plans': total_plans,

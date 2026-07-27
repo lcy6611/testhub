@@ -76,6 +76,7 @@ LOCAL_APPS = [
     'apps.performance_testing',
     'apps.scheduler.apps.SchedulerConfig',  # 统一调度中心
     'apps.ops_tools.apps.OpsToolsConfig',  # 运维工具
+    'apps.defects.apps.DefectsConfig',  # 缺陷实体与发布门禁（#260）
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

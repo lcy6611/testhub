@@ -281,6 +281,29 @@ def execute_app_test_task(execution_id, package_name: str = None, scheduled_task
             execution.result = 'passed'
         else:
             execution.result = 'failed'
+        # 失败诊断 + 证据链（仅失败用例）
+        if execution.result == 'failed':
+            try:
+                from apps.execution_common.diagnosis import classify_from_message
+                from apps.execution_common.evidence import capture_log
+                from apps.execution_common.models import ChainType
+                _failures = test_results.get('failures') or []
+                _err = '\n'.join(_failures[:5]) if _failures else ''
+                if _err:
+                    _cat, _hint = classify_from_message(_err, chain='APP')
+                else:
+                    _cat, _hint = (None, '')
+                execution.failure_category = _cat.value if _cat else None
+                execution.failure_hint = _hint or ''
+                execution.retry_count = 0
+                execution.self_healed = False
+                execution.evidence_summary = f"失败步骤: {execution.failed_steps}/{execution.total_steps}; 分类: {_cat.value if _cat else 'UNKNOWN'}"
+                capture_log(
+                    chain=ChainType.APP, execution_id=str(execution_id),
+                    text=_err or f"APP执行失败: {execution.failed_steps}步", step_key='flow',
+                )
+            except Exception:
+                pass
         execution.finished_at = timezone.now()
         execution.duration = (execution.finished_at - execution.started_at).total_seconds()
         execution.progress = 100
@@ -322,6 +345,17 @@ def execute_app_test_task(execution_id, package_name: str = None, scheduled_task
             execution.status = 'error'       # 任务异常（非用例失败）
             execution.result = None           # 没有测试结果
             execution.error_message = str(e)
+            # 任务异常诊断
+            try:
+                from apps.execution_common.diagnosis import classify_from_message
+                _cat, _hint = classify_from_message(str(e), chain='APP')
+                execution.failure_category = _cat.value if _cat else None
+                execution.failure_hint = _hint or ''
+                execution.evidence_summary = f"任务异常: {_cat.value if _cat else 'UNKNOWN'}"
+            except Exception:
+                pass
+            execution.retry_count = 0
+            execution.self_healed = False
             execution.finished_at = timezone.now()
             if execution.started_at:
                 execution.duration = (execution.finished_at - execution.started_at).total_seconds()

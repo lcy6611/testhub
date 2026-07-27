@@ -256,7 +256,28 @@ def execute_test_suite(test_suite, environment, executed_by):
                     safe_writeback_api_request_execution(history)
                 except Exception:
                     logger.warning("知识图谱回写 API 执行结果失败", exc_info=True)
-                
+
+                # 失败诊断 + 证据链（断言失败也计入失败）
+                if not passed:
+                    try:
+                        from apps.execution_common.diagnosis import classify_from_message
+                        from apps.execution_common.evidence import capture_request_response
+                        from apps.execution_common.models import ChainType
+                        _cat, _hint = classify_from_message(error_message, chain='API')
+                        history.failure_category = _cat.value if _cat else None
+                        history.failure_hint = _hint or ''
+                        history.retry_count = 0
+                        history.self_healed = False
+                        history.evidence_summary = f"HTTP {response.status_code}; 分类: {_cat.value if _cat else 'UNKNOWN'}; 断言失败"
+                        history.save()
+                        capture_request_response(
+                            chain=ChainType.API, execution_id=str(history.id),
+                            request=getattr(response, 'request', None), response=response,
+                            step_key=str(api_request.id),
+                        )
+                    except Exception:
+                        pass
+
             except Exception as e:
                 failed_count += 1
                 results.append({
@@ -284,13 +305,40 @@ def execute_test_suite(test_suite, environment, executed_by):
                     safe_writeback_api_request_execution(history)
                 except Exception:
                     logger.warning("知识图谱回写 API 执行结果失败", exc_info=True)
-        
+
+                # 请求异常诊断
+                try:
+                    from apps.execution_common.diagnosis import classify_from_message
+                    _cat, _hint = classify_from_message(str(e), chain='API')
+                    history.failure_category = _cat.value if _cat else None
+                    history.failure_hint = _hint or ''
+                    history.retry_count = 0
+                    history.self_healed = False
+                    history.evidence_summary = f"请求异常: {_cat.value if _cat else 'UNKNOWN'}"
+                    history.save()
+                except Exception:
+                    pass
+
         # 更新执行结果
         execution.end_time = timezone.now()
         execution.passed_requests = passed_count
         execution.failed_requests = failed_count
         execution.status = 'COMPLETED' if failed_count == 0 else 'FAILED'
         execution.results = results
+        # 聚合失败诊断到套件级执行记录
+        if failed_count > 0:
+            try:
+                from apps.execution_common.diagnosis import classify_from_message
+                _failed = [r for r in results if not r.get('passed')]
+                _err = _failed[0].get('error', '') if _failed else ''
+                _cat, _hint = classify_from_message(_err, chain='API')
+                execution.failure_category = _cat.value if _cat else None
+                execution.failure_hint = _hint or ''
+                execution.retry_count = 0
+                execution.self_healed = False
+                execution.evidence_summary = f"失败请求: {failed_count}/{execution.total_requests}; 分类: {_cat.value if _cat else 'UNKNOWN'}"
+            except Exception:
+                pass
         execution.save()
         
         return {
@@ -395,7 +443,31 @@ def execute_api_request(api_request, environment, executed_by):
             safe_writeback_api_request_execution(history)
         except Exception:
             logger.warning("知识图谱回写 API 执行结果失败", exc_info=True)
-        
+
+        # 失败诊断 + 证据链（接口自身断言失败也视为失败）
+        _assert_failed = any(not a.get('passed', True) for a in assertions_results)
+        if _assert_failed:
+            try:
+                from apps.execution_common.diagnosis import classify_from_message
+                from apps.execution_common.evidence import capture_request_response
+                from apps.execution_common.models import ChainType
+                _assert_msgs = [a.get('error') for a in assertions_results if not a.get('passed', True) and a.get('error')]
+                _err = _assert_msgs[0] if _assert_msgs else (response.text[:500] or str(response.status_code))
+                _cat, _hint = classify_from_message(_err, chain='API')
+                history.failure_category = _cat.value if _cat else None
+                history.failure_hint = _hint or ''
+                history.retry_count = 0
+                history.self_healed = False
+                history.evidence_summary = f"HTTP {response.status_code}; 断言失败; 分类: {_cat.value if _cat else 'UNKNOWN'}"
+                history.save()
+                capture_request_response(
+                    chain=ChainType.API, execution_id=str(history.id),
+                    request=getattr(response, 'request', None), response=response,
+                    step_key=str(api_request.id),
+                )
+            except Exception:
+                pass
+
         return {
             'success': True,
             'history_id': history.id,

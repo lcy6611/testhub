@@ -303,6 +303,7 @@ class AppTestExecutor:
             passed = 0
             failed = 0
             skipped = 0
+            failures = []
             
             for result_file in result_files:
                 try:
@@ -316,6 +317,10 @@ class AppTestExecutor:
                             passed += 1
                         elif status == 'failed':
                             failed += 1
+                            _details = data.get('statusDetails') or {}
+                            _msg = _details.get('message') or _details.get('trace') or ''
+                            if _msg:
+                                failures.append(_msg)
                         elif status == 'skipped':
                             skipped += 1
                             
@@ -329,6 +334,7 @@ class AppTestExecutor:
                 'passed': passed,
                 'failed': failed,
                 'skipped': skipped,
+                'failures': failures,
             }
             
         except Exception as e:

@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from .constants import DeviceStatus, ExecutionStatus, ExecutionResult, ElementType
 
+from apps.execution_common.models import FailureCategory
+
 User = get_user_model()
 
 
@@ -612,7 +614,17 @@ class AppTestExecution(models.Model):
     duration = models.FloatField(default=0, verbose_name='执行时长(秒)')
     report_path = models.CharField(max_length=500, blank=True, default='', verbose_name='Allure报告路径')
     error_message = models.TextField(blank=True, default='', verbose_name='错误信息')
-    
+
+    # ===== 执行诊断与稳定性（apps/execution_common 提供分类；均为可空/有默认值，向后兼容）=====
+    failure_category = models.CharField(
+        max_length=30, choices=FailureCategory.choices, null=True, blank=True,
+        verbose_name='失败分类', db_index=True,
+    )
+    failure_hint = models.TextField(blank=True, default='', verbose_name='失败提示')
+    retry_count = models.PositiveSmallIntegerField(default=0, verbose_name='已重试次数')
+    self_healed = models.BooleanField(default=False, verbose_name='是否自愈')
+    evidence_summary = models.TextField(blank=True, default='', verbose_name='证据摘要')
+
     # 执行结果统计
     total_steps = models.IntegerField(default=0, verbose_name='总步骤数')
     passed_steps = models.IntegerField(default=0, verbose_name='通过步骤数')

@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 import json
 
+from apps.execution_common.models import FailureCategory
+
 User = get_user_model()
 
 
@@ -505,6 +507,17 @@ class TestExecution(models.Model):
     # 结果数据
     result_data = models.JSONField(blank=True, null=True, verbose_name='执行结果数据')
     error_message = models.TextField(blank=True, verbose_name='错误信息')
+
+    # ===== 执行诊断与稳定性（apps/execution_common 提供分类；均为可空/有默认值，向后兼容）=====
+    failure_category = models.CharField(
+        max_length=30, choices=FailureCategory.choices, null=True, blank=True,
+        verbose_name='失败分类', db_index=True,
+    )
+    failure_hint = models.TextField(blank=True, default='', verbose_name='失败提示')
+    retry_count = models.PositiveSmallIntegerField(default=0, verbose_name='已重试次数')
+    self_healed = models.BooleanField(default=False, verbose_name='是否自愈')
+    evidence_summary = models.TextField(blank=True, default='', verbose_name='证据摘要')
+
     report_url = models.CharField(max_length=500, blank=True, verbose_name='报告URL')
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
@@ -682,6 +695,17 @@ class TestCaseExecution(models.Model):
     headless = models.BooleanField(default=False, verbose_name='无头模式')
     execution_logs = models.TextField(blank=True, verbose_name='执行日志')
     error_message = models.TextField(null=True, blank=True, verbose_name='错误信息')
+
+    # ===== 执行诊断与稳定性（apps/execution_common 提供分类；均为可空/有默认值，向后兼容）=====
+    failure_category = models.CharField(
+        max_length=30, choices=FailureCategory.choices, null=True, blank=True,
+        verbose_name='失败分类', db_index=True,
+    )
+    failure_hint = models.TextField(blank=True, default='', verbose_name='失败提示')
+    retry_count = models.PositiveSmallIntegerField(default=0, verbose_name='已重试次数')
+    self_healed = models.BooleanField(default=False, verbose_name='是否自愈')
+    evidence_summary = models.TextField(blank=True, default='', verbose_name='证据摘要')
+
     screenshots = models.JSONField(default=list, blank=True, verbose_name='截图列表')
     execution_time = models.FloatField(null=True, blank=True, verbose_name='执行时长(秒)')
     started_at = models.DateTimeField(null=True, blank=True, verbose_name='开始时间')

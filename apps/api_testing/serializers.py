@@ -190,8 +190,9 @@ class RequestHistorySerializer(serializers.ModelSerializer):
         model = RequestHistory
         fields = [
             'id', 'request', 'environment', 'request_data', 'response_data',
-            'status_code', 'response_time', 'error_message', 'assertions_results',
-            'executed_by', 'executed_at'
+            'status_code', 'response_time', 'error_message',
+            'failure_category', 'failure_hint', 'retry_count', 'self_healed', 'evidence_summary',
+            'assertions_results', 'executed_by', 'executed_at'
         ]
 
 
@@ -229,7 +230,9 @@ class TestExecutionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'test_suite', 'status', 'start_time', 'end_time',
             'total_requests', 'passed_requests', 'failed_requests',
-            'results', 'executed_by', 'created_at'
+            'results',
+            'failure_category', 'failure_hint', 'retry_count', 'self_healed', 'evidence_summary',
+            'executed_by', 'created_at'
         ]
 
     def to_representation(self, instance):

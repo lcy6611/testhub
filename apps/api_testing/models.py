@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 import json
 
+from apps.execution_common.models import FailureCategory
+
 User = get_user_model()
 
 
@@ -163,6 +165,17 @@ class RequestHistory(models.Model):
     status_code = models.IntegerField(null=True, blank=True, verbose_name='状态码')
     response_time = models.FloatField(null=True, blank=True, verbose_name='响应时间(ms)')
     error_message = models.TextField(blank=True, verbose_name='错误信息')
+
+    # ===== 执行诊断与稳定性（apps/execution_common 提供分类；均为可空/有默认值，向后兼容）=====
+    failure_category = models.CharField(
+        max_length=30, choices=FailureCategory.choices, null=True, blank=True,
+        verbose_name='失败分类', db_index=True,
+    )
+    failure_hint = models.TextField(blank=True, default='', verbose_name='失败提示')
+    retry_count = models.PositiveSmallIntegerField(default=0, verbose_name='已重试次数')
+    self_healed = models.BooleanField(default=False, verbose_name='是否自愈')
+    evidence_summary = models.TextField(blank=True, default='', verbose_name='证据摘要')
+
     assertions_results = models.JSONField(null=True, blank=True, verbose_name='断言结果')
     executed_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='执行者')
     executed_at = models.DateTimeField(auto_now_add=True, verbose_name='执行时间')
@@ -240,6 +253,17 @@ class TestExecution(models.Model):
     passed_requests = models.IntegerField(default=0, verbose_name='通过请求数')
     failed_requests = models.IntegerField(default=0, verbose_name='失败请求数')
     results = models.JSONField(default=dict, verbose_name='执行结果')
+
+    # ===== 执行诊断与稳定性（apps/execution_common 提供分类；均为可空/有默认值，向后兼容）=====
+    failure_category = models.CharField(
+        max_length=30, choices=FailureCategory.choices, null=True, blank=True,
+        verbose_name='失败分类', db_index=True,
+    )
+    failure_hint = models.TextField(blank=True, default='', verbose_name='失败提示')
+    retry_count = models.PositiveSmallIntegerField(default=0, verbose_name='已重试次数')
+    self_healed = models.BooleanField(default=False, verbose_name='是否自愈')
+    evidence_summary = models.TextField(blank=True, default='', verbose_name='证据摘要')
+
     executed_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='执行者')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
 

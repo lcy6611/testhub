@@ -69,6 +69,7 @@ LOCAL_APPS = [
     'apps.knowledge_graph',
     'apps.api_testing',
     'apps.core',
+    'apps.execution_common.apps.ExecutionCommonConfig',  # 统一执行诊断基础层（证据/重试/失败诊断）
     'apps.ui_automation.apps.UiAutomationConfig',
     'apps.data_factory',
     'apps.app_automation.apps.AppAutomationConfig',

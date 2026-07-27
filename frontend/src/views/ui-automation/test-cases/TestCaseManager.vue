@@ -1,0 +1,1816 @@
+<template>
+  <div class="test-case-manager">
+    <div class="page-header">
+      <h1 class="page-title">测试用例管理</h1>
+      <div class="header-actions">
+        <el-select v-model="projectId" placeholder="选择项目" style="width: 200px; margin-right: 15px" @change="onProjectChange">
+          <el-option v-for="project in projects" :key="project.id" :label="project.name" :value="project.id" />
+        </el-select>
+        <el-button :type="batchMode ? 'warning' : 'default'" @click="toggleBatchMode" style="margin-right: 10px">
+          <el-icon><Check /></el-icon>
+          {{ batchMode ? '退出批量' : '批量操作' }}
+        </el-button>
+        <el-button v-if="batchMode" type="danger" :loading="isBatchDeleting" :disabled="selectedTestCaseIds.length === 0" @click="batchDeleteTestCases">
+          <el-icon><Delete /></el-icon>
+          批量删除{{ selectedTestCaseIds.length ? ` (${selectedTestCaseIds.length})` : '' }}
+        </el-button>
+        <el-button type="primary" @click="showCreateDialog = true">
+          <el-icon><Plus /></el-icon>
+          新建测试用例
+        </el-button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <!-- 左侧：测试用例列表 -->
+      <div class="left-panel">
+        <div class="panel-header">
+          <h3>测试用例列表</h3>
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索测试用例..."
+            clearable
+            size="small"
+            style="width: 200px"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </div>
+
+        <div class="test-case-list">
+          <div
+            v-for="testCase in filteredTestCases"
+            :key="testCase.id"
+            class="test-case-item"
+            :class="{ active: selectedTestCase?.id === testCase.id }"
+            @click="batchMode ? toggleSelect(testCase) : selectTestCase(testCase)"
+          >
+            <div class="case-header">
+              <div class="case-info">
+                <el-checkbox
+                  v-if="batchMode"
+                  :model-value="selectedTestCaseIds.includes(testCase.id)"
+                  @change="toggleSelect(testCase)"
+                  @click.stop
+                  style="margin-right: 8px"
+                />
+                <h4 class="case-name">{{ testCase.name }}</h4>
+                <p class="case-description">{{ testCase.description || '暂无描述' }}</p>
+              </div>
+              <div class="case-actions">
+                <el-button size="small" text @click.stop="runTestCase(testCase)">
+                  <el-icon><CaretRight /></el-icon>
+                  执行
+                </el-button>
+                <el-button size="small" text @click.stop="editTestCase(testCase)">
+                  <el-icon><Edit /></el-icon>
+                  编辑
+                </el-button>
+                <el-button size="small" text @click.stop="copyTestCase(testCase)">
+                  <el-icon><CopyDocument /></el-icon>
+                  复制
+                </el-button>
+                <el-button size="small" text type="primary" @click.stop="openReuseDialog(testCase)">
+                  <el-icon><Share /></el-icon>
+                  复用
+                </el-button>
+                <el-button size="small" text type="danger" @click.stop="deleteTestCase(testCase)">
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </div>
+            </div>
+            <div class="case-meta">
+              <span class="step-count">{{ testCase.steps?.length || 0 }} 步骤</span>
+              <el-tag v-if="testCase.used_in_suites_count > 0" type="success" size="small" effect="plain" style="margin-left:6px">
+                被 {{ testCase.used_in_suites_count }} 个套件引用
+              </el-tag>
+              <span class="update-time">{{ formatTime(testCase.updated_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：测试用例详情和步骤编辑 -->
+      <div class="right-panel">
+        <div v-if="selectedTestCase" class="test-case-detail">
+          <div class="detail-header">
+            <h3>{{ selectedTestCase.name }}</h3>
+            <div class="detail-actions">
+              <el-button size="small" @click="addStep">
+                <el-icon><Plus /></el-icon>
+                添加步骤
+              </el-button>
+              <el-button size="small" type="primary" @click="saveTestCase">
+                <el-icon><Check /></el-icon>
+                保存
+              </el-button>
+              <el-select v-model="selectedEngine" placeholder="选择引擎" size="small" style="width: 130px; margin-right: 10px">
+                <el-option label="Playwright" value="playwright" />
+                <el-option label="Selenium" value="selenium" />
+              </el-select>
+              <el-select v-model="selectedBrowser" placeholder="选择浏览器" size="small" style="width: 120px; margin-right: 10px">
+                <el-option label="Chrome" value="chrome" />
+                <el-option label="Firefox" value="firefox" />
+                <el-option label="Safari" value="safari" />
+                <el-option label="Edge" value="edge" />
+              </el-select>
+              <el-select v-model="headlessMode" placeholder="运行模式" size="small" style="width: 110px; margin-right: 10px">
+                <el-option label="有头模式" :value="false" />
+                <el-option label="无头模式" :value="true" />
+              </el-select>
+              <el-button size="small" type="success" @click="runTestCase(selectedTestCase)" :loading="isRunning">
+                <el-icon v-if="!isRunning"><CaretRight /></el-icon>
+                {{ isRunning ? '执行中...' : '运行' }}
+              </el-button>
+              <el-button size="small" v-if="executionResult" @click="toggleView">
+                <el-icon><component :is="showSteps ? 'View' : 'Edit'" /></el-icon>
+                {{ showSteps ? '查看执行结果' : '编辑步骤' }}
+              </el-button>
+              <el-button
+                size="small"
+                v-if="executionResult && !showSteps"
+                type="success"
+                @click="runTestCase(selectedTestCase)"
+                :loading="isRunning"
+              >
+                <el-icon v-if="!isRunning"><Refresh /></el-icon>
+                重新运行
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 测试步骤编辑 -->
+          <div class="steps-container" v-show="showSteps">
+            <div class="steps-header">
+              <h4>测试步骤</h4>
+              <el-button size="small" text @click="expandAllSteps">
+                {{ allStepsExpanded ? '折叠全部' : '展开全部' }}
+              </el-button>
+            </div>
+
+            <div class="steps-scroll-container">
+              <div class="steps-list">
+                <draggable
+                  v-model="currentSteps"
+                  item-key="id"
+                  handle=".drag-handle"
+                  @change="onStepsReorder"
+                >
+                  <template #item="{ element, index }">
+                    <div class="step-item" :class="{ expanded: element.expanded }">
+                      <div class="step-header">
+                        <div class="step-left">
+                          <el-icon class="drag-handle"><Rank /></el-icon>
+                          <span class="step-number">{{ index + 1 }}</span>
+                          <el-select
+                            v-model="element.action_type"
+                            placeholder="选择操作"
+                            size="small"
+                            style="width: 120px"
+                            @change="onActionTypeChange(element)"
+                          >
+                            <el-option label="点击" value="click" />
+                            <el-option label="输入文本" value="fill" />
+                            <el-option label="获取文本" value="getText" />
+                            <el-option label="等待元素" value="waitFor" />
+                            <el-option label="悬停" value="hover" />
+                            <el-option label="滚动" value="scroll" />
+                            <el-option label="截图" value="screenshot" />
+                            <el-option label="断言" value="assert" />
+                            <el-option label="等待" value="wait" />
+                            <el-option label="切换标签页" value="switchTab" />
+                          </el-select>
+                          <el-select
+                            v-if="needsElement(element.action_type)"
+                            v-model="element.element_id"
+                            placeholder="选择元素"
+                            size="small"
+                            style="width: 200px"
+                            filterable
+                            @change="onElementChange(element)"
+                          >
+                            <el-option
+                              v-for="elem in availableElements"
+                              :key="elem.id"
+                              :label="`${elem.name} (${elem.locator_value})`"
+                              :value="elem.id"
+                            />
+                          </el-select>
+                        </div>
+                        <div class="step-right">
+                          <el-button
+                            size="small"
+                            text
+                            @click="element.expanded = !element.expanded"
+                          >
+                            <el-icon>
+                              <component :is="element.expanded ? 'ArrowUp' : 'ArrowDown'" />
+                            </el-icon>
+                          </el-button>
+                          <el-button size="small" text type="danger" @click="removeStep(index)">
+                            <el-icon><Delete /></el-icon>
+                          </el-button>
+                        </div>
+                      </div>
+
+                      <div v-if="element.expanded" class="step-content">
+                        <!-- 输入参数 -->
+                        <div v-if="needsInputValue(element.action_type)" class="step-param">
+                          <label>输入值：</label>
+                          <div style="display: flex; gap: 5px; flex: 1">
+                            <el-input
+                              v-model="element.input_value"
+                              :placeholder="element.action_type === 'switchTab' ? '输入索引(0,1...)或留空切换到最新' : '请输入内容，支持变量如 ${random_phone()}'"
+                              size="small"
+                            />
+                            <el-tooltip content="插入动态变量" placement="top" v-if="element.action_type !== 'switchTab'">
+                              <el-button size="small" @click="openVariableHelper(element, 'input_value')">
+                                <el-icon><MagicStick /></el-icon>
+                              </el-button>
+                            </el-tooltip>
+                          </div>
+                        </div>
+
+                        <!-- 等待时间 -->
+                        <div v-if="needsWaitTime(element.action_type)" class="step-param">
+                          <label>等待时间（毫秒）：</label>
+                          <el-input-number
+                            v-model="element.wait_time"
+                            :min="100"
+                            :max="30000"
+                            :step="100"
+                            size="small"
+                          />
+                        </div>
+
+                        <!-- 断言参数 -->
+                        <div v-if="element.action_type === 'assert'" class="step-param">
+                          <label>断言类型：</label>
+                          <el-select v-model="element.assert_type" size="small" style="width: 150px">
+                            <el-option label="文本包含" value="textContains" />
+                            <el-option label="文本等于" value="textEquals" />
+                            <el-option label="元素可见" value="isVisible" />
+                            <el-option label="元素存在" value="exists" />
+                            <el-option label="属性值" value="hasAttribute" />
+                          </el-select>
+                          <div style="display: flex; align-items: center; margin-left: 10px; width: 240px">
+                            <el-input
+                              v-model="element.assert_value"
+                              placeholder="期望值"
+                              size="small"
+                              style="flex: 1"
+                            />
+                            <el-tooltip content="插入动态变量" placement="top">
+                              <el-button size="small" style="margin-left: 5px" @click="openVariableHelper(element, 'assert_value')">
+                                <el-icon><MagicStick /></el-icon>
+                              </el-button>
+                            </el-tooltip>
+                          </div>
+                        </div>
+
+                        <!-- 步骤描述 -->
+                        <div class="step-param">
+                          <label>步骤描述：</label>
+                          <el-input
+                            v-model="element.description"
+                            placeholder="描述这个步骤的作用"
+                            size="small"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </draggable>
+              </div>
+            </div>
+          </div>
+
+          <!-- 执行结果 -->
+          <div v-if="executionResult" class="execution-result" v-show="!showSteps">
+            <div class="result-header">
+              <h4>执行结果</h4>
+              <el-tag :type="executionResult.success ? 'success' : 'danger'">
+                {{ executionResult.success ? '执行成功' : '执行失败' }}
+              </el-tag>
+            </div>
+            <div class="result-content">
+              <el-tabs v-model="resultActiveTab">
+                <el-tab-pane label="执行日志" name="logs">
+                  <div class="logs-container">
+                    <div v-if="parsedExecutionLogs.length > 0">
+                      <div v-for="(step, index) in parsedExecutionLogs" :key="index" class="log-item">
+                        <div class="log-header">
+                          <el-tag :type="step.success ? 'success' : 'danger'" size="small">
+                            步骤 {{ step.step_number }}
+                          </el-tag>
+                          <span class="log-action">{{ getActionText(step.action_type) }}</span>
+                          <span class="log-desc">{{ step.description }}</span>
+                        </div>
+                        <div v-if="step.error" class="log-error">
+                          <el-icon><WarningFilled /></el-icon>
+                          <pre class="error-message">{{ step.error }}</pre>
+                        </div>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无执行日志" />
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="失败截图" name="screenshots" v-if="executionResult.screenshots && executionResult.screenshots.length > 0">
+                  <div class="screenshots-container">
+                    <div
+                      v-for="(screenshot, index) in executionResult.screenshots"
+                      :key="index"
+                      class="screenshot-item"
+                      @click="previewScreenshot(screenshot)"
+                    >
+                      <div class="screenshot-wrapper">
+                        <img
+                          :src="screenshot.url"
+                          :alt="`截图 ${index + 1}`"
+                          :data-index="index"
+                          @error="handleImageError"
+                          @load="handleImageLoad"
+                        />
+                        <div class="screenshot-placeholder" v-if="!screenshot.loaded">
+                          <el-icon><Picture /></el-icon>
+                          <span>加载中...</span>
+                        </div>
+                        <div class="screenshot-error" v-if="screenshot.error">
+                          <el-icon><Warning /></el-icon>
+                          <span>图片加载失败</span>
+                        </div>
+                        <div class="screenshot-overlay">
+                          <el-icon class="zoom-icon"><ZoomIn /></el-icon>
+                        </div>
+                      </div>
+                      <div class="screenshot-info">
+                        <p class="screenshot-description">{{ screenshot.description || `截图 ${index + 1}` }}</p>
+                        <p class="screenshot-meta" v-if="screenshot.step_number">步骤 {{ screenshot.step_number }}</p>
+                        <p class="screenshot-time" v-if="screenshot.timestamp">{{ formatTime(screenshot.timestamp) }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="错误信息" name="errors" v-if="executionResult.errors && executionResult.errors.length > 0">
+                  <div class="errors-container">
+                    <div
+                      v-for="(error, index) in executionResult.errors"
+                      :key="index"
+                      class="error-item"
+                    >
+                      <div class="error-header">
+                        <el-tag type="danger" size="large">
+                          <el-icon><WarningFilled /></el-icon>
+                          {{ error.message || error }}
+                        </el-tag>
+                        <span v-if="error.step_number" class="error-step">
+                          步骤 {{ error.step_number }}
+                        </span>
+                      </div>
+
+                      <div v-if="error.action_type || error.element || error.description" class="error-meta">
+                        <div v-if="error.action_type" class="meta-item">
+                          <span class="meta-label">操作类型:</span>
+                          <span class="meta-value">{{ error.action_type }}</span>
+                        </div>
+                        <div v-if="error.element" class="meta-item">
+                          <span class="meta-label">目标元素:</span>
+                          <span class="meta-value">{{ error.element }}</span>
+                        </div>
+                        <div v-if="error.description" class="meta-item">
+                          <span class="meta-label">步骤描述:</span>
+                          <span class="meta-value">{{ error.description }}</span>
+                        </div>
+                      </div>
+
+                      <div v-if="error.details || error.stack" class="error-details">
+                        <div class="details-header">详细错误信息:</div>
+                        <pre class="details-content">{{ error.details || error.stack }}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="no-selection">
+          <el-empty description="请选择一个测试用例" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 新建/编辑测试用例对话框 -->
+    <el-dialog
+      v-model="showCreateDialog"
+      :title="editingTestCase ? '编辑测试用例' : '新建测试用例'"
+      :close-on-click-modal="false"
+      width="500px"
+    >
+      <el-form :model="testCaseForm" label-width="100px">
+        <el-form-item label="用例名称" required>
+          <el-input v-model="testCaseForm.name" placeholder="请输入测试用例名称" />
+        </el-form-item>
+        <el-form-item label="用例描述">
+          <el-input
+            v-model="testCaseForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入测试用例描述"
+          />
+        </el-form-item>
+        <el-form-item label="优先级">
+          <el-select v-model="testCaseForm.priority" style="width: 100%">
+            <el-option label="高" value="high" />
+            <el-option label="中" value="medium" />
+            <el-option label="低" value="low" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showCreateDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveTestCaseForm">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 截图预览对话框 -->
+    <el-dialog
+      v-model="showScreenshotPreview"
+      title="失败截图预览"
+      width="80%"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :modal="true"
+      :destroy-on-close="false"
+    >
+      <div v-if="currentScreenshot" class="screenshot-preview">
+        <div class="preview-info">
+          <h4>{{ currentScreenshot.description }}</h4>
+          <p v-if="currentScreenshot.step_number">失败步骤: 步骤 {{ currentScreenshot.step_number }}</p>
+          <p v-if="currentScreenshot.timestamp">截图时间: {{ formatTime(currentScreenshot.timestamp) }}</p>
+        </div>
+        <div class="preview-image">
+          <img :src="currentScreenshot.url" :alt="currentScreenshot.description" />
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 变量助手对话框 -->
+    <el-dialog
+      :close-on-press-escape="false"
+      :modal="true"
+      :destroy-on-close="false"
+      v-model="showVariableHelper"
+      title="变量助手 (点击插入)"
+      :close-on-click-modal="false"
+      width="800px"
+    >
+      <el-tabs tab-position="left" style="height: 400px">
+        <el-tab-pane
+          v-for="(category, index) in variableCategories"
+          :key="index"
+          :label="category.label"
+        >
+          <div style="height: 400px; overflow-y: auto">
+            <el-table :data="category.variables" style="width: 100%" @row-click="insertVariable" highlight-current-row cursor="pointer">
+              <el-table-column prop="name" label="函数名" width="150">
+                <template #default="{ row }">
+                  <el-tag size="small">{{ row.name }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="desc" label="描述" width="150" />
+              <el-table-column prop="syntax" label="语法" show-overflow-tooltip />
+              <el-table-column label="操作" width="80">
+                <template #default="{ row }">
+                  <el-button link type="primary" size="small">插入</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+    <!-- 复用对话框：显示被哪些套件引用 + 跨项目克隆 -->
+    <el-dialog
+      v-model="reuseDialogVisible"
+      :title="`用例复用 · ${reuseTarget?.name || ''}`"
+      width="560px"
+    >
+      <div v-if="reuseLoading">加载中...</div>
+      <template v-else-if="reuseTarget">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        >
+          <template #title>
+            「用例复用」指：本用例已加入 <b>{{ reuseSuites.length }}</b> 个测试套件，
+            也可一键克隆到其他项目共用步骤结构（元素按 locator 自动复用/新建）。
+          </template>
+        </el-alert>
+
+        <h4>① 已被以下套件引用</h4>
+        <div v-if="reuseSuites.length === 0" style="color:#999;margin:6px 0 16px">
+          暂未加入任何测试套件
+        </div>
+        <div v-else>
+          <el-tag
+            v-for="s in reuseSuites"
+            :key="s.id"
+            style="margin: 4px 6px 4px 0"
+            type="success"
+          >
+            {{ s.name }}
+          </el-tag>
+        </div>
+
+        <h4 style="margin-top: 16px">② 克隆到其他项目</h4>
+        <div style="display:flex;align-items:center;gap:8px">
+          <el-select
+            v-model="cloneTargetProjectId"
+            placeholder="选择目标项目"
+            filterable
+            style="flex:1"
+          >
+            <el-option
+              v-for="p in cloneTargetProjects"
+              :key="p.id"
+              :label="p.name"
+              :value="p.id"
+              :disabled="p.id === reuseTarget.project"
+            />
+          </el-select>
+          <el-button
+            type="primary"
+            :loading="cloning"
+            :disabled="!cloneTargetProjectId"
+            @click="confirmCloneToProject"
+          >
+            克隆
+          </el-button>
+        </div>
+        <div style="font-size:12px;color:#999;margin-top:6px">
+          注意：克隆会复制用例 + 步骤，元素按 (定位策略,值) 自动复用；目标项目里已存在相同定位器的元素会被复用，不会重复创建。
+        </div>
+      </template>
+    </el-dialog>
+        </el-tab-pane>
+      </el-tabs>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Search, Plus, Edit, Delete, Check, CaretRight, ArrowUp, ArrowDown, Rank, Picture, Warning, View, ZoomIn, Refresh, WarningFilled, MagicStick, CopyDocument, Share
+} from '@element-plus/icons-vue'
+import draggable from 'vuedraggable'
+
+import {
+  getUiProjects,
+  getElements,
+  createTestCase,
+  updateTestCase,
+  deleteTestCase as deleteTestCaseApi,
+  batchDeleteTestCases as batchDeleteTestCasesApi,
+  getTestCaseUsedInSuites,
+  cloneTestCaseToProject,
+  getTestCases,
+  runTestCase as runTestCaseApi,
+  copyTestCase as copyTestCaseApi
+} from '@/api/ui_automation'
+
+// 响应式数据
+const projects = ref([])
+const projectId = ref('')
+const testCases = ref([])
+const selectedTestCase = ref(null)
+const currentSteps = ref([])
+const availableElements = ref([])
+const searchKeyword = ref('')
+const showCreateDialog = ref(false)
+const editingTestCase = ref(null)
+const executionResult = ref(null)
+const resultActiveTab = ref('logs')
+const allStepsExpanded = ref(false)
+const showSteps = ref(true)
+const showScreenshotPreview = ref(false)
+const currentScreenshot = ref(null)
+const isRunning = ref(false)
+const selectedEngine = ref('playwright')
+// 批量选择
+const batchMode = ref(false)
+const selectedTestCaseIds = ref([])
+const isBatchDeleting = ref(false)
+// 复用对话框
+const reuseDialogVisible = ref(false)
+const reuseTarget = ref(null)
+const reuseSuites = ref([])
+const reuseLoading = ref(false)
+const cloneTargetProjectId = ref('')
+const cloneTargetProjects = ref([])
+const cloning = ref(false)
+const selectedBrowser = ref('chrome')
+const headlessMode = ref(false)
+const showVariableHelper = ref(false)
+const currentEditingStep = ref(null)
+const currentEditingField = ref('')
+
+// 表单数据
+const testCaseForm = reactive({
+  name: '',
+  description: '',
+  priority: 'medium'
+})
+
+// 计算属性
+const filteredTestCases = computed(() => {
+  if (!searchKeyword.value) return testCases.value
+  return testCases.value.filter(tc =>
+    tc.name.includes(searchKeyword.value) ||
+    tc.description?.includes(searchKeyword.value)
+  )
+})
+
+// 解析执行日志
+const parsedExecutionLogs = computed(() => {
+  if (!executionResult.value || !executionResult.value.logs) return []
+  try {
+    return typeof executionResult.value.logs === 'string'
+      ? JSON.parse(executionResult.value.logs)
+      : executionResult.value.logs
+  } catch (e) {
+    console.error('解析执行日志失败:', e)
+    return []
+  }
+})
+
+// 方法定义
+const loadProjects = async () => {
+  try {
+    const response = await getUiProjects({ page_size: 100 })
+    projects.value = response.data.results || response.data
+  } catch (error) {
+    ElMessage.error('获取项目列表失败')
+    console.error('获取项目列表失败:', error)
+  }
+}
+
+const loadTestCases = async () => {
+  if (!projectId.value) {
+    testCases.value = []
+    return
+  }
+
+  try {
+    const response = await getTestCases({ project: projectId.value })
+    testCases.value = response.data.results || response.data
+  } catch (error) {
+    console.error('获取测试用例失败:', error)
+  }
+}
+
+const loadElements = async () => {
+  if (!projectId.value) {
+    availableElements.value = []
+    return
+  }
+
+  try {
+    const response = await getElements({ project: projectId.value })
+    availableElements.value = response.data.results || response.data
+  } catch (error) {
+    console.error('获取元素列表失败:', error)
+  }
+}
+
+const onProjectChange = async () => {
+  selectedTestCase.value = null
+  currentSteps.value = []
+  executionResult.value = null
+
+  await Promise.all([
+    loadTestCases(),
+    loadElements()
+  ])
+}
+
+const selectTestCase = (testCase) => {
+  if (selectedTestCase.value && selectedTestCase.value.id === testCase.id) {
+    return
+  }
+
+  selectedTestCase.value = testCase
+  if (testCase.steps && testCase.steps.length > 0) {
+    currentSteps.value = testCase.steps.map(step => ({
+      ...step,
+      element_id: step.element || '',
+      expanded: false
+    }))
+  } else {
+    currentSteps.value = []
+  }
+  executionResult.value = null
+  showSteps.value = true
+}
+
+const addStep = () => {
+  const newStep = {
+    id: Date.now(),
+    action_type: 'click',
+    element_id: '',
+    input_value: '',
+    wait_time: 1000,
+    assert_type: 'textContains',
+    assert_value: '',
+    description: '',
+    expanded: true
+  }
+  currentSteps.value.push(newStep)
+}
+
+const removeStep = (index) => {
+  currentSteps.value.splice(index, 1)
+}
+
+const onStepsReorder = () => {
+  console.log('步骤已重新排序')
+}
+
+const onActionTypeChange = (step) => {
+  if (step.action_type !== 'fill') {
+    step.input_value = ''
+  }
+  if (step.action_type !== 'wait') {
+    step.wait_time = 1000
+  }
+  if (step.action_type !== 'assert') {
+    step.assert_type = 'textContains'
+    step.assert_value = ''
+  }
+}
+
+const onElementChange = (step) => {
+  const element = availableElements.value.find(e => e.id === step.element_id)
+  if (element && !step.description) {
+    step.description = `${getActionTypeText(step.action_type)}${element.name}`
+  }
+}
+
+const needsInputValue = (actionType) => {
+  return ['fill', 'switchTab'].includes(actionType)
+}
+
+const needsWaitTime = (actionType) => {
+  return ['wait', 'waitFor'].includes(actionType)
+}
+
+const needsElement = (actionType) => {
+  return !['wait', 'switchTab', 'screenshot'].includes(actionType)
+}
+
+const expandAllSteps = () => {
+  allStepsExpanded.value = !allStepsExpanded.value
+  currentSteps.value.forEach(step => {
+    step.expanded = allStepsExpanded.value
+  })
+}
+
+const saveTestCase = async () => {
+  if (!selectedTestCase.value) return
+
+  try {
+    const updateData = {
+      ...selectedTestCase.value,
+      steps: currentSteps.value
+    }
+
+    await updateTestCase(selectedTestCase.value.id, updateData)
+    ElMessage.success('测试用例保存成功')
+
+    const index = testCases.value.findIndex(tc => tc.id === selectedTestCase.value.id)
+    if (index !== -1) {
+      testCases.value[index] = { ...updateData }
+      selectedTestCase.value = { ...updateData }
+    }
+  } catch (error) {
+    console.error('保存测试用例失败:', error)
+    ElMessage.error('保存测试用例失败')
+  }
+}
+
+const runTestCase = async (testCase) => {
+  isRunning.value = true
+  try {
+    const modeText = headlessMode.value ? '无头模式' : '有头模式'
+    ElMessage.info(`开始执行测试用例... (引擎: ${selectedEngine.value.toUpperCase()}, 浏览器: ${selectedBrowser.value.toUpperCase()}, ${modeText})`)
+
+    const response = await runTestCaseApi(testCase.id, {
+      project_id: projectId.value,
+      engine: selectedEngine.value,
+      browser: selectedBrowser.value,
+      headless: headlessMode.value
+    })
+
+    executionResult.value = response.data
+    resultActiveTab.value = 'logs'
+    showSteps.value = false
+
+    if (response.data.success) {
+      ElMessage.success('测试用例执行成功')
+    } else {
+      ElMessage.error('测试用例执行失败')
+      if (response.data.screenshots && response.data.screenshots.length > 0) {
+        resultActiveTab.value = 'screenshots'
+      }
+    }
+  } catch (error) {
+    console.error('执行测试用例失败:', error)
+
+    const errorMessage = error.response?.data?.message || error.message || '执行失败'
+    const errorLogs = error.response?.data?.logs || `测试用例执行出错\n\n错误信息: ${errorMessage}`
+
+    const errors = error.response?.data?.errors || [{
+      message: errorMessage,
+      details: error.stack || '',
+      step_number: null,
+      action_type: '',
+      element: '',
+      description: ''
+    }]
+
+    executionResult.value = {
+      success: false,
+      logs: errorLogs,
+      screenshots: error.response?.data?.screenshots || [],
+      execution_time: 0,
+      errors: errors
+    }
+    resultActiveTab.value = 'logs'
+    showSteps.value = false
+
+    ElMessage.error(`执行测试用例失败: ${errorMessage}`)
+  } finally {
+    isRunning.value = false
+  }
+}
+
+const toggleView = () => {
+  showSteps.value = !showSteps.value
+}
+
+const editTestCase = (testCase) => {
+  editingTestCase.value = testCase
+  testCaseForm.name = testCase.name
+  testCaseForm.description = testCase.description || ''
+  testCaseForm.priority = testCase.priority || 'medium'
+  showCreateDialog.value = true
+}
+
+const deleteTestCase = async (testCase) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除测试用例"${testCase.name}"吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    await deleteTestCaseApi(testCase.id)
+    ElMessage.success('删除成功')
+
+    const index = testCases.value.findIndex(tc => tc.id === testCase.id)
+    if (index !== -1) {
+      testCases.value.splice(index, 1)
+    }
+
+    if (selectedTestCase.value?.id === testCase.id) {
+      selectedTestCase.value = null
+      currentSteps.value = []
+      executionResult.value = null
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除测试用例失败:', error)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const toggleBatchMode = () => {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) {
+    selectedTestCaseIds.value = []
+  }
+}
+
+const toggleSelect = (testCase) => {
+  const idx = selectedTestCaseIds.value.indexOf(testCase.id)
+  if (idx >= 0) {
+    selectedTestCaseIds.value.splice(idx, 1)
+  } else {
+    selectedTestCaseIds.value.push(testCase.id)
+  }
+}
+
+const batchDeleteTestCases = async () => {
+  const ids = [...selectedTestCaseIds.value]
+  if (ids.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要批量删除选中的 ${ids.length} 个测试用例吗？\n\n注意：步骤将一并删除，但已抓取的元素会保留（可被新用例复用）。`,
+      '批量删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    isBatchDeleting.value = true
+    const res = await batchDeleteTestCasesApi(ids)
+    ElMessage.success(res?.message || `已删除 ${ids.length} 个用例`)
+    // 从本地列表移除
+    const idSet = new Set(ids)
+    testCases.value = testCases.value.filter(tc => !idSet.has(tc.id))
+    selectedTestCaseIds.value = []
+    if (selectedTestCase.value && idSet.has(selectedTestCase.value.id)) {
+      selectedTestCase.value = null
+      currentSteps.value = []
+      executionResult.value = null
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量删除失败:', error)
+      ElMessage.error('批量删除失败')
+    }
+  } finally {
+    isBatchDeleting.value = false
+  }
+}
+
+const openReuseDialog = async (testCase) => {
+  reuseTarget.value = testCase
+  reuseDialogVisible.value = true
+  reuseLoading.value = true
+  cloneTargetProjectId.value = ''
+  try {
+    const allProjectsResp = await getUiProjects({ page_size: 100 })
+    const allProjects = allProjectsResp.data.results || allProjectsResp.data
+    cloneTargetProjects.value = allProjects.filter(p => p.id !== testCase.project)
+    const usedResp = await getTestCaseUsedInSuites(testCase.id)
+    reuseSuites.value = usedResp.data.suites || []
+  } catch (err) {
+    console.error('加载复用信息失败:', err)
+    ElMessage.error('加载复用信息失败')
+    reuseSuites.value = []
+    cloneTargetProjects.value = []
+  } finally {
+    reuseLoading.value = false
+  }
+}
+
+const confirmCloneToProject = async () => {
+  if (!reuseTarget.value || !cloneTargetProjectId.value) return
+  try {
+    cloning.value = true
+    const resp = await cloneTestCaseToProject(reuseTarget.value.id, cloneTargetProjectId.value)
+    ElMessage.success(`已克隆到项目「${resp.data.project_name}」的新用例 #${resp.data.id}`)
+    reuseDialogVisible.value = false
+    // 若切到目标项目则刷新列表
+    if (projectId.value === resp.data.project_id) {
+      await loadTestCases()
+    }
+  } catch (err) {
+    console.error('克隆失败:', err)
+    ElMessage.error('克隆失败：' + (err?.response?.data?.error || err.message))
+  } finally {
+    cloning.value = false
+  }
+}
+
+const copyTestCase = async (testCase) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要复制测试用例"${testCase.name}"吗？`,
+      '确认复制',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+
+    const response = await copyTestCaseApi(testCase.id)
+    ElMessage.success('复制成功')
+
+    const index = testCases.value.findIndex(tc => tc.id === testCase.id)
+    if (index !== -1) {
+      testCases.value.splice(index + 1, 0, response.data)
+    } else {
+      testCases.value.push(response.data)
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('复制测试用例失败:', error)
+      ElMessage.error('复制失败')
+    }
+  }
+}
+
+const variableCategories = [
+  {
+    label: '随机数',
+    variables: [
+      { name: 'random_int', syntax: '${random_int(min, max)}', desc: '生成随机整数', example: '${random_int(100, 999)}' },
+      { name: 'random_float', syntax: '${random_float(min, max, decimals)}', desc: '生成随机浮点数', example: '${random_float(0, 1, 2)}' },
+      { name: 'random_digits', syntax: '${random_digits(length)}', desc: '生成随机数字字符串', example: '${random_digits(6)}' }
+    ]
+  },
+  {
+    label: '随机字符串',
+    variables: [
+      { name: 'random_string', syntax: '${random_string(length)}', desc: '生成随机字母数字字符串', example: '${random_string(8)}' },
+      { name: 'random_letters', syntax: '${random_letters(length)}', desc: '生成随机字母字符串', example: '${random_letters(8)}' },
+      { name: 'random_chinese', syntax: '${random_chinese(length)}', desc: '生成随机中文字符', example: '${random_chinese(2)}' }
+    ]
+  },
+  {
+    label: '业务数据',
+    variables: [
+      { name: 'random_phone', syntax: '${random_phone()}', desc: '生成随机手机号', example: '${random_phone()}' },
+      { name: 'random_email', syntax: '${random_email()}', desc: '生成随机邮箱', example: '${random_email()}' },
+      { name: 'random_id_card', syntax: '${random_id_card()}', desc: '生成随机身份证号', example: '${random_id_card()}' },
+      { name: 'random_name', syntax: '${random_name()}', desc: '生成随机中文姓名', example: '${random_name()}' },
+      { name: 'random_company', syntax: '${random_company()}', desc: '生成随机公司名称', example: '${random_company()}' },
+      { name: 'random_address', syntax: '${random_address()}', desc: '生成随机地址', example: '${random_address()}' }
+    ]
+  },
+  {
+    label: '时间日期',
+    variables: [
+      { name: 'timestamp', syntax: '${timestamp()}', desc: '当前时间戳(毫秒)', example: '${timestamp()}' },
+      { name: 'datetime', syntax: '${datetime(format)}', desc: '格式化日期时间', example: '${datetime(YYYY-MM-DD HH:mm:ss)}' },
+      { name: 'date', syntax: '${date(format)}', desc: '格式化日期', example: '${date(YYYY-MM-DD)}' },
+      { name: 'time', syntax: '${time(format)}', desc: '格式化时间', example: '${time(HH:mm:ss)}' },
+      { name: 'date_offset', syntax: '${date_offset(days, format)}', desc: '日期偏移', example: '${date_offset(1, YYYY-MM-DD)}' }
+    ]
+  },
+  {
+    label: '其他',
+    variables: [
+      { name: 'uuid', syntax: '${uuid()}', desc: '生成UUID', example: '${uuid()}' },
+      { name: 'base64', syntax: '${base64(text)}', desc: 'Base64编码', example: '${base64(123456)}' },
+      { name: 'md5', syntax: '${md5(text)}', desc: 'MD5哈希', example: '${md5(123456)}' }
+    ]
+  }
+]
+
+const openVariableHelper = (step, field) => {
+  currentEditingStep.value = step
+  currentEditingField.value = field
+  showVariableHelper.value = true
+}
+
+const insertVariable = (variable) => {
+  if (currentEditingStep.value && currentEditingField.value) {
+    const example = variable.example
+    const currentValue = currentEditingStep.value[currentEditingField.value] || ''
+    
+    if (!currentValue) {
+      currentEditingStep.value[currentEditingField.value] = example
+    } else {
+      currentEditingStep.value[currentEditingField.value] = currentValue + example
+    }
+    
+    ElMessage.success(`已插入变量: ${variable.name}`)
+    showVariableHelper.value = false
+  }
+}
+
+const saveTestCaseForm = async () => {
+  if (!testCaseForm.name.trim()) {
+    ElMessage.warning('请输入测试用例名称')
+    return
+  }
+
+  try {
+    const data = {
+      name: testCaseForm.name,
+      description: testCaseForm.description,
+      priority: testCaseForm.priority,
+      project: projectId.value,
+      steps: []
+    }
+
+    if (editingTestCase.value) {
+      await updateTestCase(editingTestCase.value.id, data)
+      ElMessage.success('测试用例更新成功')
+
+      const index = testCases.value.findIndex(tc => tc.id === editingTestCase.value.id)
+      if (index !== -1) {
+        testCases.value[index] = { ...testCases.value[index], ...data }
+      }
+    } else {
+      const response = await createTestCase(data)
+      ElMessage.success('测试用例创建成功')
+      testCases.value.push(response.data)
+    }
+
+    showCreateDialog.value = false
+    editingTestCase.value = null
+    resetForm()
+  } catch (error) {
+    console.error('保存测试用例失败:', error)
+    ElMessage.error('保存失败')
+  }
+}
+
+const resetForm = () => {
+  testCaseForm.name = ''
+  testCaseForm.description = ''
+  testCaseForm.priority = 'medium'
+}
+
+const getActionTypeText = (actionType) => {
+  const textMap = {
+    'click': '点击',
+    'fill': '输入',
+    'getText': '获取文本',
+    'waitFor': '等待',
+    'hover': '悬停',
+    'scroll': '滚动',
+    'screenshot': '截图',
+    'assert': '断言',
+    'wait': '等待'
+  }
+  return textMap[actionType] || actionType
+}
+
+const formatTime = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  return date.toLocaleString()
+}
+
+const getActionText = (actionType) => {
+  const actionMap = {
+    'click': '点击',
+    'fill': '填写',
+    'getText': '获取文本',
+    'waitFor': '等待元素',
+    'hover': '悬停',
+    'scroll': '滚动',
+    'screenshot': '截图',
+    'assert': '断言',
+    'wait': '等待'
+  }
+  return actionMap[actionType] || actionType
+}
+
+const handleImageError = (event) => {
+  const img = event.target
+  const screenshotIndex = parseInt(img.dataset.index)
+  if (executionResult.value && executionResult.value.screenshots) {
+    executionResult.value.screenshots[screenshotIndex].error = true
+    executionResult.value.screenshots[screenshotIndex].loaded = true
+  }
+}
+
+const handleImageLoad = (event) => {
+  const img = event.target
+  const screenshotIndex = parseInt(img.dataset.index)
+  if (executionResult.value && executionResult.value.screenshots) {
+    executionResult.value.screenshots[screenshotIndex].loaded = true
+    executionResult.value.screenshots[screenshotIndex].error = false
+  }
+}
+
+const previewScreenshot = (screenshot) => {
+  currentScreenshot.value = screenshot
+  showScreenshotPreview.value = true
+}
+
+const route = useRoute()
+
+onMounted(async () => {
+  await loadProjects()
+
+  if (projects.value.length > 0) {
+    // 优先用 query 里的 projectId
+    const qp = parseInt(route.query.projectId)
+    if (qp && projects.value.some(p => p.id === qp)) {
+      projectId.value = qp
+    } else {
+      projectId.value = projects.value[0].id
+    }
+    await onProjectChange()
+    // 定位指定用例
+    const qc = parseInt(route.query.caseId)
+    if (qc) {
+      await locateTestCase(qc)
+    }
+  }
+})
+
+async function locateTestCase(caseId) {
+  await nextTick()
+  let target = testCases.value.find(c => c.id === caseId)
+  if (target) {
+    editTestCase(target)
+  }
+}
+</script>
+
+<style scoped>
+.test-case-manager {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e6e6e6;
+  background: white;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.left-panel {
+  width: 350px;
+  border-right: 1px solid #e6e6e6;
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 15px;
+  border-bottom: 1px solid #e6e6e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h3 {
+  margin: 0;
+}
+
+.test-case-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.test-case-item {
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.test-case-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+}
+
+.test-case-item.active {
+  border-color: #409eff;
+  background-color: #f0f8ff;
+}
+
+.case-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.case-info {
+  flex: 1;
+}
+
+.case-name {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.case-description {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.case-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.case-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #888;
+}
+
+.step-count {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.right-panel {
+  flex: 1;
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.test-case-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow: hidden;
+  height: 100%;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.detail-header h3 {
+  margin: 0;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.steps-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 20px;
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.steps-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.steps-header h4 {
+  margin: 0;
+}
+
+.steps-list {
+  padding: 10px;
+  padding-bottom: 20px;
+}
+
+.steps-scroll-container {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  padding-right: 5px;
+}
+
+.step-item {
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  background: white;
+  transition: all 0.3s;
+}
+
+.step-item:hover {
+  border-color: #409eff;
+}
+
+.step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background: #fafafa;
+  border-radius: 6px 6px 0 0;
+}
+
+.step-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drag-handle {
+  cursor: move;
+  color: #999;
+}
+
+.step-number {
+  background: #409eff;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.step-right {
+  display: flex;
+  gap: 5px;
+}
+
+.step-content {
+  padding: 15px;
+  border-top: 1px solid #e6e6e6;
+}
+
+.step-param {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.step-param label {
+  width: 120px;
+  font-weight: 500;
+  color: #333;
+}
+
+.execution-result {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  background: white;
+  overflow: hidden;
+}
+
+.execution-result .result-header {
+  padding: 15px;
+  border-bottom: 1px solid #e6e6e6;
+  background: #fafafa;
+  border-radius: 6px 6px 0 0;
+}
+
+.execution-result .result-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+}
+
+.result-header h4 {
+  margin: 0;
+}
+
+.logs-container {
+  max-height: 500px;
+  overflow-y: auto;
+  background: #f5f7fa;
+  padding: 15px;
+  border-radius: 4px;
+}
+
+.log-item {
+  margin-bottom: 15px;
+  padding: 12px;
+  background: white;
+  border-radius: 4px;
+  border-left: 3px solid #409eff;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.log-action {
+  font-weight: 500;
+  color: #606266;
+}
+
+.log-desc {
+  color: #909399;
+  font-size: 14px;
+}
+
+.log-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #f56c6c;
+  background: #fef0f0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.log-error .error-message {
+  margin: 0;
+  padding: 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+
+.screenshots-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 10px;
+}
+
+.screenshot-item {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.screenshot-item:hover {
+  transform: translateY(-4px);
+}
+
+.screenshot-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  border: 2px solid #e6e6e6;
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+
+.screenshot-item:hover .screenshot-wrapper {
+  border-color: #409eff;
+}
+
+.screenshot-wrapper img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: opacity 0.3s ease;
+}
+
+.screenshot-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.screenshot-item:hover .screenshot-overlay {
+  opacity: 1;
+}
+
+.zoom-icon {
+  font-size: 48px;
+  color: white;
+}
+
+.screenshot-placeholder,
+.screenshot-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #999;
+  font-size: 14px;
+}
+
+.screenshot-error {
+  color: #f56c6c;
+}
+
+.screenshot-info {
+  margin-top: 10px;
+}
+
+.screenshot-description {
+  margin: 0 0 5px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  text-align: left;
+}
+
+.screenshot-meta {
+  margin: 0 0 3px 0;
+  font-size: 12px;
+  color: #666;
+  text-align: left;
+}
+
+.screenshot-time {
+  margin: 0;
+  font-size: 11px;
+  color: #999;
+  text-align: left;
+}
+
+.screenshot-preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+
+.preview-info h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.preview-info p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.preview-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 20px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.preview-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.errors-container {
+  padding: 10px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.error-item {
+  background: #fff;
+  border: 2px solid #f56c6c;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.error-step {
+  background: #fef0f0;
+  color: #f56c6c;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.error-meta {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.meta-label {
+  font-weight: 600;
+  color: #606266;
+  min-width: 80px;
+  margin-right: 10px;
+}
+
+.meta-value {
+  color: #303133;
+  flex: 1;
+}
+
+.error-details {
+  background: #2d2d2d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.details-header {
+  background: #1e1e1e;
+  color: #fff;
+  padding: 10px 15px;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.details-content {
+  color: #ff6b6b;
+  padding: 15px;
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.no-selection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+</style>

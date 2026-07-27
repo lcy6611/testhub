@@ -1,0 +1,208 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: TestCase FullFlow Importable
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.41@680b9357e6cd290ef5e8691a35286bffddb75bf30c8dacfe351d8b5e5fd87283
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      - .PDF
+      - .DOC
+      - .DOCX
+      - .TXT
+      allowed_file_types:
+      - document
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: llm
+      id: 1774513438427-llm
+      source: '1774513438427'
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: llm
+        targetType: answer
+      id: llm-answer
+      source: llm
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+    nodes:
+    - data:
+        selected: false
+        title: 用户输入
+        type: start
+        variables: []
+      height: 73
+      id: '1774513438427'
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}
+
+
+            {{#sys.files#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.3
+          mode: chat
+          name: Qwen3.5-35B-A3B
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: c0f7d5f0-9fb7-44a6-8e3e-5f9b9fb0a101
+          role: system
+          text: |-
+            你是资深测试架构师。请对用户输入的需求执行“全流程测试用例生成”，严格按以下四阶段思考并输出：
+
+            阶段1：需求理解与分类
+            - 提炼功能点、业务规则、异常场景、边界条件。
+            - 判断测试类型覆盖：功能/接口/异常/安全/性能（按需）。
+
+            阶段2：生成初稿用例
+            - 先输出“初稿用例”列表，每条包含：标题、前置条件、步骤、预期结果、优先级。
+
+            阶段3：自评审
+            - 对初稿做评审，指出遗漏、歧义、不可执行步骤、覆盖不足。
+            - 输出“评审意见”，按严重级别分组（高/中/低）。
+
+            阶段4：修订并输出最终用例
+            - 根据评审意见修订初稿，补齐缺失场景，去重并标准化。
+            - 输出“最终用例”列表，结构同初稿，但内容为修订后的最终版本。
+
+            输出格式必须严格如下（不要额外说明）：
+
+            generated_test_cases:
+            <这里放初稿用例，纯文本，多条>
+
+            review_feedback:
+            <这里放评审意见，纯文本>
+
+            final_test_cases:
+            <这里放最终用例，纯文本，多条>
+
+            要求：
+            1) 三个字段都必须有内容，不能为空。
+            2) 如果信息不足，先做合理假设并在对应内容中标注“假设：...”，不要拒答。
+            3) 用中文输出，条理清晰，可直接用于测试执行。
+        selected: true
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm
+      position:
+        x: 378
+        y: 282
+      positionAbsolute:
+        x: 378
+        y: 282
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#llm.text#}}'
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 103
+      id: answer
+      position:
+        x: 680
+        y: 282
+      positionAbsolute:
+        x: 680
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 117
+      y: 83
+      zoom: 1
+  rag_pipeline_variables: []

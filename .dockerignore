@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtualenvs
+.venv/
+venv/
+ENV/
+env/
+
+# Node
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Git
+.git/
+.gitignore
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Local data / uploads (keep in volumes in prod)
+media/
+static/
+
+# Docker / local volumes / third-party projects inside repo
+dify-main/
+**/docker/volumes/
+

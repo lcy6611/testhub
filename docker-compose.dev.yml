@@ -1,0 +1,175 @@
+name: testhub_dev
+
+services:
+  redis:
+    image: redis:6-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-123456}", "--logfile", "/host_logs/redis.log"]
+    ports:
+      - "${REDIS_PORT_LOCAL:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - "E:/PycharmProjects/testhub_platform/logs:/host_logs:rw"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-123456}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: testhub_dev-influxdb-1
+    ports:
+      - "${INFLUXDB_PORT_LOCAL:-8086}:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-admin123456}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN:-testhub-influxdb-token}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-testhub}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-jmeter}
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    env_file:
+      - docker/.env.docker
+    environment:
+      # 直接连接宿主机上的 MySQL
+      DB_HOST: host.docker.internal
+      DB_PORT: "${DB_PORT_LOCAL:-3306}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-123456}@redis:6379/0"
+      DJANGO_SETTINGS_MODULE: backend.settings
+      # 性能测试执行器优先取 DB jmeter_path，env 作为 fallback（防止 DB 被清后跑不起来）
+      PERFORMANCE_JMETER_PATH: /opt/jmeter/bin/jmeter
+      JMETER_PATH: /opt/jmeter/bin/jmeter
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/app
+      # 挂载宿主机 JMeter 到容器内（性能测试执行引擎需要）
+      - "E:/软件/jmeter/apache-jmeter-5.6.3/apache-jmeter-5.6.3:/opt/jmeter:ro"
+      # 挂载宿主机日志目录，供运维工具「日志查询」读取真实日志（只读）
+      - "E:/PycharmProjects/testhub_platform/logs:/host_logs:ro"
+    ports:
+      - "${BACKEND_PORT_LOCAL:-8000}:8000"
+      # VNC 端口，用于查看容器内 Xvfb 桌面（x11vnc）
+      - "${VNC_PORT_LOCAL:-5900}:5900"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: testhub_dev-backend
+    env_file:
+      - docker/.env.docker
+    environment:
+      DB_HOST: host.docker.internal
+      DB_PORT: "${DB_PORT_LOCAL:-3306}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-123456}@redis:6379/0"
+      DJANGO_SETTINGS_MODULE: backend.settings
+      # 性能测试执行器优先取 DB jmeter_path，env 作为 fallback（防止 DB 被清后跑不起来）
+      PERFORMANCE_JMETER_PATH: /opt/jmeter/bin/jmeter
+      JMETER_PATH: /opt/jmeter/bin/jmeter
+      LOG_FILE: "worker.log"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/app
+      - "E:/软件/jmeter/apache-jmeter-5.6.3/apache-jmeter-5.6.3:/opt/jmeter:ro"
+    entrypoint: ["sh", "-c"]
+    command: ["pip install --no-cache-dir django-q2==1.10.0 django-picklefield==3.4.0 && exec celery -A backend worker -l info"]
+    depends_on:
+      backend:
+        condition: service_started
+
+  beat:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: testhub_dev-backend
+    env_file:
+      - docker/.env.docker
+    environment:
+      DB_HOST: host.docker.internal
+      DB_PORT: "${DB_PORT_LOCAL:-3306}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-123456}@redis:6379/0"
+      DJANGO_SETTINGS_MODULE: backend.settings
+      # 性能测试执行器优先取 DB jmeter_path，env 作为 fallback（防止 DB 被清后跑不起来）
+      PERFORMANCE_JMETER_PATH: /opt/jmeter/bin/jmeter
+      JMETER_PATH: /opt/jmeter/bin/jmeter
+      LOG_FILE: "beat.log"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/app
+    entrypoint: ["sh", "-c"]
+    command: ["pip install --no-cache-dir django-q2==1.10.0 django-picklefield==3.4.0 && exec celery -A backend beat -l info"]
+    depends_on:
+      backend:
+        condition: service_started
+
+  qcluster:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: testhub_dev-backend
+    env_file:
+      - docker/.env.docker
+    # 覆盖默认 entrypoint：先补装 django-q2（开发期未重建镜像时也能直接起；
+    # 正式镜像已在 requirements.txt 内置，pip 安装会快速跳过）
+    entrypoint: ["sh", "-c"]
+    environment:
+      DB_HOST: host.docker.internal
+      DB_PORT: "${DB_PORT_LOCAL:-3306}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-123456}@redis:6379/0"
+      DJANGO_SETTINGS_MODULE: backend.settings
+      # 性能测试执行器优先取 DB jmeter_path，env 作为 fallback（防止 DB 被清后跑不起来）
+      PERFORMANCE_JMETER_PATH: /opt/jmeter/bin/jmeter
+      JMETER_PATH: /opt/jmeter/bin/jmeter
+      LOG_FILE: "qcluster.log"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/app
+      - "E:/软件/jmeter/apache-jmeter-5.6.3/apache-jmeter-5.6.3:/opt/jmeter:ro"
+    command: ["pip install --no-cache-dir django-q2==1.10.0 django-picklefield==3.4.0 && python manage.py migrate && python manage.py qcluster"]
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    environment:
+      VITE_HOST: 0.0.0.0
+      # 必须将 /api 代理到 TestHub 后端（backend:8000），不能指向 Dify 或其他服务，否则配置页会 404/HTML 报错
+      VITE_PROXY_TARGET: http://backend:8000
+    volumes:
+      - ./frontend:/app/frontend
+      - "E:/PycharmProjects/testhub_platform/logs:/host_logs:rw"
+    working_dir: /app/frontend
+    command: ["sh", "-lc", "npm install && npm run dev -- --host 0.0.0.0 --port 5173 2>&1 | tee /host_logs/frontend.log"]
+    ports:
+      # 只绑定 127.0.0.1，避免 Docker Desktop WSL2 的 IPv6 wslrelay 转发不稳定导致 localhost 偶尔 404
+      - "127.0.0.1:${FRONTEND_PORT_LOCAL:-5173}:5173"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  redis_data:
+  influxdb_data:
+

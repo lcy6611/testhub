@@ -1,0 +1,11 @@
+feat: 完成APP自动化测试模块迁移与功能完善
+
+- 迁移APP自动化测试模块前后端代码（apps/app_automation/）
+- 新增前端APP自动化页面和路由配置
+- 添加APP自动化API接口封装和工具函数
+- 首页添加APP自动化测试入口卡片
+- 侧边栏菜单添加APP自动化模块导航
+- 修复依赖冲突：six版本从1.17.0调整为1.16.0以兼容airtest
+- Docker构建优化：pip安装使用清华镜像源加速
+- 新增APP自动化E2E测试脚本（apps/test_app_automation_flow.py）
+- 修复后端URL路由配置，确保APP自动化接口正常访问

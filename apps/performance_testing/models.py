@@ -1,0 +1,389 @@
+# -*- coding: utf-8 -*-
+"""性能测试数据模型。"""
+
+from __future__ import annotations
+
+from django.conf import settings
+from django.db import models
+
+
+class PerformanceScript(models.Model):
+    """性能测试脚本。"""
+
+    SCRIPT_TYPE_CHOICES = [
+        ("ONLINE", "在线编排"),
+        ("JMX_RAW", "纯 JMX"),
+        ("JMX_UPLOAD", "上传 JMX 创建"),
+    ]
+
+    STATUS_CHOICES = [
+        ("draft", "草稿"),
+        ("published", "已发布"),
+    ]
+
+    name = models.CharField(max_length=200, verbose_name="脚本名称")
+    description = models.TextField(blank=True, default="", verbose_name="描述")
+    projects = models.ManyToManyField(
+        "projects.Project",
+        related_name="performance_scripts",
+        blank=True,
+        verbose_name="关联项目",
+    )
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="draft", verbose_name="状态")
+    script_type = models.CharField(
+        max_length=16, choices=SCRIPT_TYPE_CHOICES, default="ONLINE", verbose_name="脚本模式"
+    )
+    # 在线编排：线程组/HTTP请求/变量/CSV/断言/定时器结构
+    jmx_config = models.JSONField(default=dict, blank=True, verbose_name="在线编排配置")
+    # 纯 JMX 模式：直接编辑 JMX XML 内容
+    jmx_content = models.TextField(blank=True, default="", verbose_name="JMX 内容")
+    # 上传 JMX 创建：上传的 JMX 文件
+    jmx_file = models.FileField(upload_to="performance/jmx/", null=True, blank=True, verbose_name="JMX 文件")
+    # 用户定义变量 [{name, value}, ...]
+    variables = models.JSONField(default=list, blank=True, verbose_name="用户定义变量")
+    # CSV 参数化数据集 [{name, file, delimiter, encoding, variable_names}, ...]
+    csv_datasets = models.JSONField(default=list, blank=True, verbose_name="CSV 数据集")
+    # 执行参数
+    thread_count = models.PositiveIntegerField(default=10, verbose_name="线程数")
+    ramp_up = models.PositiveIntegerField(default=5, verbose_name="Ramp-Up(秒)")
+    duration = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
+    # 实时报告开关
+    realtime_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "perf_script"
+        verbose_name = "性能测试脚本"
+        verbose_name_plural = "性能测试脚本"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class PerformanceScriptCsvFile(models.Model):
+    """性能脚本关联的 CSV 数据文件（参数化用）。"""
+
+    script = models.ForeignKey(
+        PerformanceScript,
+        on_delete=models.CASCADE,
+        related_name="csv_files",
+        verbose_name="关联脚本",
+    )
+    file = models.FileField(upload_to="performance/csv/", verbose_name="CSV 文件")
+    original_name = models.CharField(max_length=255, blank=True, default="", verbose_name="原始文件名")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="上传时间")
+
+    class Meta:
+        db_table = "perf_script_csv_file"
+        verbose_name = "性能脚本 CSV 文件"
+        verbose_name_plural = "性能脚本 CSV 文件"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.original_name or self.file.name
+
+
+class PerformanceBatchExecution(models.Model):
+    """按项目批量执行性能测试。"""
+
+    STATUS_CHOICES = [
+        ("QUEUED", "排队中"),
+        ("RUNNING", "执行中"),
+        ("COMPLETED", "已完成"),
+        ("FAILED", "失败"),
+        ("PARTIAL", "部分完成"),
+    ]
+
+    batch_id = models.CharField(max_length=50, unique=True, verbose_name="批次ID")
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="performance_batches", verbose_name="关联项目",
+    )
+    name = models.CharField(max_length=200, verbose_name="批次名称")
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default="QUEUED", verbose_name="状态"
+    )
+    total_scripts = models.PositiveIntegerField(default=0, verbose_name="脚本总数")
+    completed_scripts = models.PositiveIntegerField(default=0, verbose_name="已完成数")
+    failed_scripts = models.PositiveIntegerField(default=0, verbose_name="失败数")
+    # 执行参数（统一应用到批次内所有脚本）
+    thread_count = models.PositiveIntegerField(default=10, verbose_name="线程数")
+    ramp_up = models.PositiveIntegerField(default=5, verbose_name="Ramp-Up(秒)")
+    duration = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
+    realtime_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+    error_message = models.TextField(blank=True, default="", verbose_name="错误信息")
+    report_path = models.TextField(blank=True, default="", verbose_name="项目级报告目录")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="完成时间")
+
+    class Meta:
+        db_table = "perf_batch_execution"
+        verbose_name = "性能批量执行"
+        verbose_name_plural = "性能批量执行"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.batch_id} ({self.get_status_display()})"
+
+
+class PerformanceExecution(models.Model):
+    """性能测试执行记录。"""
+
+    STATUS_CHOICES = [
+        ("QUEUED", "排队中"),
+        ("RUNNING", "执行中"),
+        ("COMPLETED", "已完成"),
+        ("FAILED", "失败"),
+        ("CANCELLED", "已取消"),
+    ]
+
+    execution_id = models.CharField(max_length=50, unique=True, verbose_name="执行ID")
+    script = models.ForeignKey(
+        PerformanceScript, on_delete=models.CASCADE, related_name="executions", verbose_name="脚本"
+    )
+    batch = models.ForeignKey(
+        PerformanceBatchExecution, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="executions", verbose_name="所属批次",
+    )
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default="QUEUED", verbose_name="状态"
+    )
+    # 执行参数快照
+    thread_count = models.PositiveIntegerField(default=10, verbose_name="线程数")
+    ramp_up = models.PositiveIntegerField(default=5, verbose_name="Ramp-Up(秒)")
+    duration = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
+    realtime_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+
+    # 产物路径
+    jmx_path = models.CharField(max_length=500, blank=True, default="", verbose_name="JMX 路径")
+    jtl_path = models.CharField(max_length=500, blank=True, default="", verbose_name="JTL 路径")
+    jmeter_log = models.TextField(blank=True, default="", verbose_name="JMeter 日志")
+    report_path = models.CharField(max_length=500, blank=True, default="", verbose_name="HTML报告路径")
+    error_message = models.TextField(blank=True, default="", verbose_name="错误信息")
+
+    started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始时间")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="完成时间")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = "perf_execution"
+        verbose_name = "性能执行记录"
+        verbose_name_plural = "性能执行记录"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.execution_id} ({self.get_status_display()})"
+
+
+class PerformanceSummary(models.Model):
+    """执行汇总指标。"""
+
+    execution = models.OneToOneField(
+        PerformanceExecution, on_delete=models.CASCADE, related_name="summary", verbose_name="执行记录"
+    )
+    total_samples = models.PositiveIntegerField(default=0, verbose_name="总样本数")
+    error_count = models.PositiveIntegerField(default=0, verbose_name="错误数")
+    error_rate = models.FloatField(default=0.0, verbose_name="错误率(%)")
+    avg_response_time = models.FloatField(default=0.0, verbose_name="平均响应时间(ms)")
+    min_response_time = models.FloatField(default=0.0, verbose_name="最小响应时间(ms)")
+    max_response_time = models.FloatField(default=0.0, verbose_name="最大响应时间(ms)")
+    p90 = models.FloatField(default=0.0, verbose_name="P90(ms)")
+    p95 = models.FloatField(default=0.0, verbose_name="P95(ms)")
+    p99 = models.FloatField(default=0.0, verbose_name="P99(ms)")
+    throughput = models.FloatField(default=0.0, verbose_name="吞吐量(req/s)")
+    data_received = models.BigIntegerField(default=0, verbose_name="接收字节")
+    data_sent = models.BigIntegerField(default=0, verbose_name="发送字节")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = "perf_summary"
+        verbose_name = "性能汇总"
+        verbose_name_plural = "性能汇总"
+
+
+class PerformanceMetric(models.Model):
+    """按请求名分组的指标。"""
+
+    execution = models.ForeignKey(
+        PerformanceExecution, on_delete=models.CASCADE, related_name="metrics", verbose_name="执行记录"
+    )
+    sample_label = models.CharField(max_length=500, verbose_name="请求名称")
+    sample_count = models.PositiveIntegerField(default=0, verbose_name="样本数")
+    error_count = models.PositiveIntegerField(default=0, verbose_name="错误数")
+    error_rate = models.FloatField(default=0.0, verbose_name="错误率(%)")
+    avg = models.FloatField(default=0.0, verbose_name="平均(ms)")
+    min = models.FloatField(default=0.0, verbose_name="最小(ms)")
+    max = models.FloatField(default=0.0, verbose_name="最大(ms)")
+    p90 = models.FloatField(default=0.0, verbose_name="P90(ms)")
+    p95 = models.FloatField(default=0.0, verbose_name="P95(ms)")
+    p99 = models.FloatField(default=0.0, verbose_name="P99(ms)")
+    throughput = models.FloatField(default=0.0, verbose_name="吞吐量(req/s)")
+    timeline = models.JSONField(default=list, blank=True, verbose_name="10秒时间线")
+    top_errors = models.JSONField(default=list, blank=True, verbose_name="Top20错误")
+
+    class Meta:
+        db_table = "perf_metric"
+        verbose_name = "性能指标"
+        verbose_name_plural = "性能指标"
+        indexes = [models.Index(fields=["execution"])]
+
+
+class PerformanceReport(models.Model):
+    """性能测试报告（基于执行记录）。"""
+
+    execution = models.OneToOneField(
+        PerformanceExecution, on_delete=models.CASCADE, related_name="report", verbose_name="执行记录"
+    )
+    name = models.CharField(max_length=200, verbose_name="报告名称")
+    description = models.TextField(blank=True, default="", verbose_name="描述")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = "perf_report"
+        verbose_name = "性能测试报告"
+        verbose_name_plural = "性能测试报告"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class PerformanceScheduledTask(models.Model):
+    """性能测试定时任务。"""
+
+    STATUS_CHOICES = [
+        ("enabled", "启用"),
+        ("disabled", "禁用"),
+    ]
+
+    name = models.CharField(max_length=200, verbose_name="任务名称")
+    script = models.ForeignKey(
+        PerformanceScript, on_delete=models.CASCADE, related_name="scheduled_tasks", verbose_name="关联脚本"
+    )
+    cron = models.CharField(max_length=200, verbose_name="Cron 表达式")
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="enabled", verbose_name="状态")
+    thread_count = models.PositiveIntegerField(default=10, verbose_name="线程数")
+    ramp_up = models.PositiveIntegerField(default=5, verbose_name="Ramp-Up(秒)")
+    duration = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
+    realtime_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+    description = models.TextField(blank=True, default="", verbose_name="描述")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "perf_scheduled_task"
+        verbose_name = "性能定时任务"
+        verbose_name_plural = "性能定时任务"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class PerformanceConfig(models.Model):
+    """性能测试全局配置（单例）。"""
+
+    jmeter_path = models.CharField(
+        max_length=500, blank=True, default="", verbose_name="JMeter 可执行路径",
+        help_text="绝对路径，如 /opt/apache-jmeter-5.6.3/bin/jmeter；留空则使用环境变量或 PATH 中的 jmeter"
+    )
+    realtime_report_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+    influxdb_url = models.CharField(max_length=500, blank=True, default="", verbose_name="InfluxDB URL")
+    influxdb_org = models.CharField(max_length=200, blank=True, default="testhub", verbose_name="InfluxDB Org")
+    influxdb_bucket = models.CharField(max_length=200, blank=True, default="jmeter", verbose_name="InfluxDB Bucket")
+    influxdb_token = models.CharField(max_length=500, blank=True, default="", verbose_name="InfluxDB Token")
+    influxdb_measurement = models.CharField(max_length=200, blank=True, default="jmeter", verbose_name="InfluxDB Measurement")
+    influxdb_application = models.CharField(max_length=200, blank=True, default="testhub", verbose_name="InfluxDB Application")
+    max_threads = models.PositiveIntegerField(default=1000, verbose_name="最大线程数")
+    max_duration = models.PositiveIntegerField(default=7200, verbose_name="最大持续时间(秒)")
+    # Prometheus 监控对接
+    prometheus_enabled = models.BooleanField(default=False, verbose_name="启用 Prometheus 监控")
+    prometheus_url = models.CharField(
+        max_length=500, blank=True, default="", verbose_name="Prometheus URL",
+        help_text="如 http://10.0.x.x:9090（Docker 内部可用 http://prometheus:9090）"
+    )
+    prometheus_step = models.PositiveIntegerField(default=15, verbose_name="采集步长(秒)")
+    # 默认监控目标列表：[{name, type, instance, job, metrics}], type: app_server/db/redis/gateway/custom
+    monitor_targets = models.JSONField(
+        default=list, blank=True, verbose_name="监控目标列表",
+        help_text="执行性能测试时按时间窗采集这些目标的资源指标"
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "perf_config"
+        verbose_name = "性能测试配置"
+        verbose_name_plural = "性能测试配置"
+
+    def __str__(self):
+        return "性能测试全局配置"
+
+    @classmethod
+    def get_singleton(cls) -> "PerformanceConfig":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class PerformanceMonitorMetric(models.Model):
+    """执行期间的服务器/服务资源监控指标（来自 Prometheus）。"""
+
+    TARGET_TYPE_CHOICES = [
+        ("app_server", "应用服务器"),
+        ("db", "数据库"),
+        ("redis", "Redis/缓存"),
+        ("gateway", "网关"),
+        ("custom", "自定义微服务"),
+    ]
+
+    execution = models.ForeignKey(
+        PerformanceExecution, on_delete=models.CASCADE,
+        related_name="monitor_metrics", verbose_name="执行记录"
+    )
+    target_name = models.CharField(max_length=200, verbose_name="监控目标名称")
+    target_type = models.CharField(
+        max_length=50, choices=TARGET_TYPE_CHOICES, default="app_server", verbose_name="目标类型"
+    )
+    metric_key = models.CharField(max_length=100, verbose_name="指标键")
+    metric_label = models.CharField(max_length=100, verbose_name="指标中文名")
+    metric_unit = models.CharField(max_length=20, default="", verbose_name="单位")
+    # 时间线：[{t: "相对秒或时间戳", v: 数值}]
+    timeline = models.JSONField(default=list, blank=True, verbose_name="时间线")
+    min_value = models.FloatField(default=0.0, verbose_name="最小")
+    avg_value = models.FloatField(default=0.0, verbose_name="平均")
+    max_value = models.FloatField(default=0.0, verbose_name="最大")
+    peak_value = models.FloatField(default=0.0, verbose_name="峰值")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = "perf_monitor_metric"
+        verbose_name = "监控指标"
+        verbose_name_plural = "监控指标"
+        ordering = ["target_name", "metric_key"]
+        indexes = [models.Index(fields=["execution"])]
+
+    def __str__(self):
+        return f"{self.target_name}/{self.metric_label}"

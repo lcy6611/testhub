@@ -1,0 +1,197 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#E8F7E8'
+  mode: advanced-chat
+  name: WF_API_Automation
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.41@680b9357e6cd290ef5e8691a35286bffddb75bf30c8dacfe351d8b5e5fd87283
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JSON
+      - .YAML
+      - .YML
+      - .TXT
+      - .MD
+      allowed_file_types:
+      - document
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: llm
+      id: start-llm
+      source: start
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: llm
+        targetType: answer
+      id: llm-answer
+      source: llm
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+    nodes:
+    - data:
+        selected: false
+        title: USER INPUT
+        type: start
+        variables: []
+      height: 73
+      id: start
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}
+
+
+            {{#sys.files#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.2
+          mode: chat
+          name: Qwen3.5-35B-A3B
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: sys-api-001
+          role: system
+          text: |-
+            你是 API 自动化测试专家。根据用户输入（可能含 OpenAPI/Swagger/接口描述）输出 API 自动化方案。
+
+            输出字段（全部必填）：
+
+            api_test_scope:
+            - 接口范围、优先级、风险点
+
+            api_test_cases:
+            - 正向/反向/边界/鉴权/幂等/并发测试场景
+            - 每条含：接口、方法、参数、断言
+
+            api_test_data_plan:
+            - 参数化数据设计、测试数据准备与清理策略
+
+            api_assertion_plan:
+            - 状态码、响应结构、关键字段、时延与稳定性断言
+
+            api_execution_plan:
+            - 冒烟/回归分批执行、失败重跑、环境隔离建议
+
+            api_script_template:
+            - 提供 pytest + requests 风格的脚本目录结构与最小样例（文本示例）
+
+            规则：
+            1. 中文输出
+            2. 信息不足时写“假设：...”
+            3. 仅输出上述字段，不加多余说明
+        selected: true
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm
+      position:
+        x: 378
+        y: 282
+      positionAbsolute:
+        x: 378
+        y: 282
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#llm.text#}}'
+        selected: false
+        title: ANSWER
+        type: answer
+        variables: []
+      height: 103
+      id: answer
+      position:
+        x: 680
+        y: 282
+      positionAbsolute:
+        x: 680
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 117
+      y: 83
+      zoom: 1
+  rag_pipeline_variables: []

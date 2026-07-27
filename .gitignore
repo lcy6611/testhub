@@ -1,0 +1,76 @@
+# 忽略虚拟环境及项目产生的临时文件
+.venv/
+venv/
+.idea/
+.claude/
+.vscode/
+__pycache__/
+.DS_Store
+.pytest_cache
+logs/*
+!logs/.gitkeep
+
+# Django migrations 属于可复现数据库结构，必须纳入版本库
+
+# 忽略media下的子目录及文件，但保留.gitkeep文件
+media/allure-reports/*
+!media/allure-reports/.gitkeep
+media/allure-results/*
+!media/allure-results/.gitkeep
+media/requirement_docs/*
+!media/requirement_docs/.gitkeep
+media/ai_recording/*
+!media/ai_recording/.gitkeep
+
+# 忽略前端文件
+frontend/node_modules/
+frontend/.DS_Store
+frontend/*.log
+frontend/dist/
+
+# Docker 本地环境变量（包含敏感信息，不入库）
+docker/.env.docker
+
+# Dify 部署：克隆的仓库与离线镜像包不纳入版本库
+deploy/dify-repo/
+deploy/dify/offline/
+
+# 本地下载/解压的 Dify 源码与压缩包不入库
+dify-main/
+dify-main.zip
+
+# 本地环境变量与敏感配置
+.env
+.env.*
+!.env.example
+docker/prometheus/mysqld_exporter.cnf
+\# 一路回车使用默认路径
+\# 一路回车使用默认路径.pub
+
+# WorkBuddy / Playwright 本地运行数据
+.workbuddy/
+.playwright-cli/
+
+# 运行时媒体、构建和生成产物
+media/hermes/
+media/kb_hub/
+media/performance/
+frontend/dist_local_check/
+agent_history.gif
+jmeter.log
+celerybeat-schedule
+generated-images/
+skill_packages/
+allure/
+static/
+
+# 顶层临时验证脚本、截图和输出
+/_*.py
+/*.png
+/kb*.txt
+/dify_test.txt
+/*.yaml
+/verify_*.js
+/verify_*.txt
+/10
+/nul

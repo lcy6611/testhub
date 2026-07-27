@@ -25,6 +25,9 @@ from .views import (
     UiNotificationLogViewSet,
     OperationRecordViewSet,
     UiDashboardViewSet,
+    CloneAssetView,
+    ElementReferencesView,
+    SharedStepViewSet,
 )
 from .views_case_script import UiScriptGenerationViewSet
 from .views_config import EnvironmentConfigViewSet, AIIntelligentModeConfigViewSet
@@ -53,6 +56,7 @@ router.register(r'ai-scheduled-tasks', AIScheduledTaskViewSet, basename='ai-sche
 router.register(r'ai-notification-logs', AiNotificationLogViewSet, basename='ai-notification-logs')
 router.register(r'notification-logs', UiNotificationLogViewSet)
 router.register(r'operation-records', OperationRecordViewSet)
+router.register(r'shared-steps', SharedStepViewSet)
 router.register(r'case-script-generations', UiScriptGenerationViewSet, basename='case-script-generations')
 
 
@@ -63,6 +67,8 @@ router.register(r'ai-models', AIIntelligentModeConfigViewSet, basename='ai-model
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('clone-asset/<str:asset_type>/<int:pk>/', CloneAssetView.as_view()),
+    path('element-references/<int:pk>/', ElementReferencesView.as_view()),
 ]
 
 # 添加媒体文件路由

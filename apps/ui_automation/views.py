@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -24,7 +25,7 @@ from .models import (
     TestCase, TestCaseStep, TestCaseExecution, OperationRecord,
     TestCase, TestCaseStep, TestCaseExecution, OperationRecord,
     UiScheduledTask, UiNotificationConfig, UiNotificationLog, UiTaskNotificationSetting,
-    AICase, AIExecutionRecord, AISuite, AISuiteCase, AIScheduledTask, AiNotificationLog,
+    AICase, AIExecutionRecord, AISuite, AISuiteCase, AIScheduledTask, AiNotificationLog, SharedStep,
 )
 from .serializers import (
     UiProjectSerializer, UiProjectCreateSerializer, UiProjectUpdateSerializer,
@@ -44,8 +45,10 @@ from .serializers import (
     UiScheduledTaskSerializer, UiNotificationConfigSerializer, UiNotificationLogSerializer, UiTaskNotificationSettingSerializer,
     AICaseSerializer, AIExecutionRecordSerializer,
     AISuiteSerializer, AISuiteCreateUpdateSerializer, AIScheduledTaskSerializer, AiNotificationLogSerializer,
+    SharedStepSerializer,
 )
 from .operation_logger import log_operation
+from .services.asset_clone import CLONE_DISPATCH, element_references
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -2142,6 +2145,80 @@ class TestCaseExecutionViewSet(viewsets.ModelViewSet):
         return Response({'message': f'成功删除 {deleted_count} 条记录'})
 
 
+
+
+class CloneAssetView(APIView):
+    """UI 资产跨项目克隆（资产复用治理 #259）
+
+    POST /ui-automation/clone-asset/<asset_type>/<pk>/
+    body: {"target_project_id": <int>}
+    asset_type ∈ {element, test_script, test_case, page_object}
+    """
+    def post(self, request, asset_type, pk):
+        fn = CLONE_DISPATCH.get(asset_type)
+        if not fn:
+            return Response({'error': f'未知资源类型: {asset_type}'}, status=status.HTTP_400_BAD_REQUEST)
+        model_map = {
+            'element': Element,
+            'test_script': TestScript,
+            'test_case': TestCase,
+            'page_object': PageObject,
+        }
+        Model = model_map[asset_type]
+        try:
+            src = Model.objects.get(id=pk)
+        except Model.DoesNotExist:
+            return Response({'error': '源资产不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+        target_project_id = request.data.get('target_project_id')
+        if not target_project_id:
+            return Response({'error': 'target_project_id 必填'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target_project = UiProject.objects.get(id=target_project_id)
+        except UiProject.DoesNotExist:
+            return Response({'error': '目标项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+        if target_project.id == src.project_id:
+            return Response({'error': '目标项目不能与源项目相同'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            new = fn(src, target_project, user=request.user)
+        except Exception as e:
+            logger.exception('克隆资产失败')
+            return Response({'error': f'克隆失败: {e}'}, status=status.HTTP_500_INTERNAL_ERROR)
+
+        return Response({
+            'id': new.id,
+            'name': new.name,
+            'asset_type': asset_type,
+            'target_project_id': target_project.id,
+            'cloned_from': src.id,
+        }, status=status.HTTP_201_CREATED)
+
+
+class ElementReferencesView(APIView):
+    """影响分析：查询引用了某元素的脚本步骤/用例步骤/页面对象（资产复用治理 #259）"""
+    def get(self, request, pk):
+        try:
+            element = Element.objects.get(id=pk)
+        except Element.DoesNotExist:
+            return Response({'error': '元素不存在'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(element_references(element), status=status.HTTP_200_OK)
+
+
+class SharedStepViewSet(viewsets.ModelViewSet):
+    """公共步骤库视图集（资产复用治理 #259）"""
+    queryset = SharedStep.objects.all()
+    serializer_class = SharedStepSerializer
+
+    def get_queryset(self):
+        queryset = SharedStep.objects.all()
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class OperationRecordViewSet(viewsets.ReadOnlyModelViewSet):

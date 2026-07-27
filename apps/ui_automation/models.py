@@ -138,6 +138,10 @@ class Element(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
+    # ===== 资产复用治理：克隆溯源 =====
+    cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')
+    cloned_at = models.DateTimeField(null=True, blank=True, verbose_name='克隆时间')
+
     class Meta:
         db_table = 'ui_elements'
         verbose_name = 'UI元素'
@@ -204,6 +208,10 @@ class TestScript(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
+    # ===== 资产复用治理：克隆溯源 =====
+    cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')
+    cloned_at = models.DateTimeField(null=True, blank=True, verbose_name='克隆时间')
+
     class Meta:
         db_table = 'ui_test_scripts'
         verbose_name = 'UI测试脚本'
@@ -225,6 +233,10 @@ class PageObject(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='创建人')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    # ===== 资产复用治理：克隆溯源 =====
+    cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')
+    cloned_at = models.DateTimeField(null=True, blank=True, verbose_name='克隆时间')
 
     class Meta:
         db_table = 'ui_page_objects'
@@ -355,6 +367,12 @@ class ScriptStep(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
+    # ===== 资产复用治理：引用公共步骤 =====
+    shared_step = models.ForeignKey(
+        'SharedStep', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='usages_in_script', verbose_name='引用的公共步骤',
+    )
+
     class Meta:
         db_table = 'ui_script_steps'
         verbose_name = '脚本步骤'
@@ -364,6 +382,41 @@ class ScriptStep(models.Model):
 
     def __str__(self):
         return f'{self.script.name} - Step {self.step_order}: {self.action_type}'
+
+
+class SharedStep(models.Model):
+    """公共步骤库：可跨脚本/用例复用的步骤模板（资产复用治理）
+
+    与 ScriptStep/TestCaseStep 解耦——步骤通过 shared_step 外键引用本表，
+    实现「一处维护、多处复用」。执行引擎在展开步骤时若发现 shared_step 非空，
+    则以公共步骤的 action_type/params/element 覆盖当前步骤（保留当前步骤的
+    顺序与输入值覆盖能力）。
+    """
+    project = models.ForeignKey(UiProject, on_delete=models.CASCADE, related_name='shared_steps', verbose_name='所属项目')
+    name = models.CharField(max_length=200, verbose_name='步骤名称')
+    description = models.TextField(blank=True, verbose_name='步骤描述')
+    action_type = models.CharField(max_length=20, choices=ScriptStep.ACTION_TYPE_CHOICES, verbose_name='操作类型')
+    target_element = models.ForeignKey(Element, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='目标元素')
+    action_params = models.JSONField(blank=True, null=True, verbose_name='操作参数')
+    expected_result = models.CharField(max_length=500, blank=True, verbose_name='预期结果')
+    wait_before = models.IntegerField(default=0, verbose_name='执行前等待(毫秒)')
+    wait_after = models.IntegerField(default=0, verbose_name='执行后等待(毫秒)')
+    usage_count = models.IntegerField(default=0, verbose_name='被引用次数')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='创建人')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')
+    cloned_at = models.DateTimeField(null=True, blank=True, verbose_name='克隆时间')
+
+    class Meta:
+        db_table = 'ui_shared_steps'
+        verbose_name = '公共步骤'
+        verbose_name_plural = '公共步骤'
+        ordering = ['-created_at']
+        unique_together = ['project', 'name']
+
+    def __str__(self):
+        return self.name
 
 
 class ScriptElementUsage(models.Model):
@@ -609,6 +662,10 @@ class TestCase(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
+    # ===== 资产复用治理：克隆溯源 =====
+    cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')
+    cloned_at = models.DateTimeField(null=True, blank=True, verbose_name='克隆时间')
+
     class Meta:
         db_table = 'ui_test_cases'
         verbose_name = 'UI测试用例'
@@ -652,6 +709,12 @@ class TestCaseStep(models.Model):
     assert_value = models.TextField(blank=True, verbose_name='断言期望值')
     description = models.TextField(blank=True, verbose_name='步骤描述')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    # ===== 资产复用治理：引用公共步骤 =====
+    shared_step = models.ForeignKey(
+        'SharedStep', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='usages_in_case', verbose_name='引用的公共步骤',
+    )
 
     class Meta:
         db_table = 'ui_test_case_steps'

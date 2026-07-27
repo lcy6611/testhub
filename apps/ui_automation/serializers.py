@@ -6,7 +6,8 @@ from .models import (
     ElementGroup, PageObject, PageObjectElement, ScriptStep, ScriptElementUsage,
     TestCase, TestCaseStep, TestCaseExecution, OperationRecord,
     UiScheduledTask, UiNotificationConfig, UiNotificationLog, UiTaskNotificationSetting,
-    AICase, AIExecutionRecord, AISuite, AISuiteCase, AIScheduledTask, AiNotificationLog
+    AICase, AIExecutionRecord, AISuite, AISuiteCase, AIScheduledTask, AiNotificationLog,
+    SharedStep,
 )
 from django.contrib.auth import get_user_model
 
@@ -576,7 +577,8 @@ class TestCaseStepSerializer(serializers.ModelSerializer):
         model = TestCaseStep
         fields = [
             'id', 'step_number', 'action_type', 'element', 'element_name', 'element_locator',
-            'input_value', 'wait_time', 'assert_type', 'assert_value', 'description', 'created_at'
+            'input_value', 'wait_time', 'assert_type', 'assert_value', 'description',
+            'shared_step', 'created_at'
         ]
 
 
@@ -592,7 +594,7 @@ class TestCaseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'project', 'project_name', 'status', 'priority',
             'created_by', 'created_by_name', 'created_at', 'updated_at', 'steps',
-            'used_in_suites_count',
+            'used_in_suites_count', 'cloned_from', 'cloned_at',
         ]
         read_only_fields = ['created_by']
 
@@ -606,6 +608,22 @@ class TestCaseSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['created_by'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class SharedStepSerializer(serializers.ModelSerializer):
+    """公共步骤库序列化器（资产复用治理 #259）"""
+    target_element = ElementEnhancedSerializer(read_only=True)
+    target_element_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+
+    class Meta:
+        model = SharedStep
+        fields = [
+            'id', 'project', 'name', 'description', 'action_type',
+            'target_element', 'target_element_id', 'action_params', 'expected_result',
+            'wait_before', 'wait_after', 'usage_count', 'created_by',
+            'created_at', 'updated_at', 'cloned_from', 'cloned_at',
+        ]
+        read_only_fields = ('created_at', 'updated_at', 'usage_count', 'cloned_from', 'cloned_at')
 
 
 class TestCaseExecutionSerializer(serializers.ModelSerializer):

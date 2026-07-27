@@ -502,6 +502,11 @@ class TestExecutor:
                         'locator_value': step.element.locator_value,
                         'locator_strategy': step.element.locator_strategy.name if step.element.locator_strategy else 'css'
                     }
+                    # 携带全部定位器（主+备用），供执行时自愈使用
+                    try:
+                        step_data['all_locators'] = step.element.get_all_locators()
+                    except Exception:
+                        step_data['all_locators'] = []
 
                 case_data['steps'].append(step_data)
 
@@ -614,6 +619,17 @@ class TestExecutor:
                             ).total_seconds() if case_execution.started_at else 0
                             case_execution.error_message = error_msg
                             case_execution.execution_logs = json.dumps([], ensure_ascii=False)
+                            # 导航失败诊断
+                            try:
+                                from apps.execution_common.diagnosis import classify_from_message
+                                _cat, _hint = classify_from_message(error_msg, chain='UI')
+                                case_execution.failure_category = _cat.value if _cat else None
+                                case_execution.failure_hint = _hint or ''
+                                case_execution.evidence_summary = f"导航失败: {_cat.value if _cat else 'UNKNOWN'}; 基础URL不可达"
+                            except Exception:
+                                pass
+                            case_execution.retry_count = 0
+                            case_execution.self_healed = False
                             case_execution.save()
 
                             try:
@@ -628,7 +644,9 @@ class TestExecutor:
                             continue
 
                     # 执行测试用例（不再传递page参数，使用self.current_page）
-                    case_result = self.execute_test_case_playwright_no_db(case_data)
+                    case_result = self.execute_test_case_playwright_no_db(
+                        case_data, case_execution_id=case_executions[case_data['id']].id
+                    )
                     self.results.append(case_result)
                     print(f"✓ 用例执行完成，状态: {case_result['status']}")
 
@@ -642,7 +660,15 @@ class TestExecutor:
                         case_execution.error_message = case_result['error']
                     if case_result.get('screenshots'):
                         case_execution.screenshots = case_result['screenshots']
+                    # 诊断/自愈/证据字段回写
+                    case_execution.failure_category = case_result.get('failure_category') or None
+                    case_execution.failure_hint = case_result.get('failure_hint') or ''
+                    case_execution.retry_count = case_result.get('retry_count') or 0
+                    case_execution.self_healed = bool(case_result.get('self_healed'))
+                    case_execution.evidence_summary = case_result.get('evidence_summary') or ''
                     case_execution.save()
+                    # 证据链：把失败截图写入 ExecutionEvidence，便于跨模块回溯
+                    self._record_ui_evidence(case_execution.id, case_result)
 
                     try:
                         from apps.knowledge_graph.writeback import safe_writeback_ui_test_case_execution
@@ -725,6 +751,17 @@ class TestExecutor:
                     case_execution.finished_at = timezone.now()
                     case_execution.execution_time = (case_execution.finished_at - case_execution.started_at).total_seconds()
                     case_execution.error_message = f"用例执行异常: {str(e)}"
+                    # 用例级异常诊断
+                    try:
+                        from apps.execution_common.diagnosis import classify_from_message
+                        _cat, _hint = classify_from_message(str(e), chain='UI')
+                        case_execution.failure_category = _cat.value if _cat else None
+                        case_execution.failure_hint = _hint or ''
+                        case_execution.evidence_summary = f"用例执行异常: {_cat.value if _cat else 'UNKNOWN'}"
+                    except Exception:
+                        pass
+                    case_execution.retry_count = 0
+                    case_execution.self_healed = False
                     case_execution.save()
 
                 finally:
@@ -749,7 +786,7 @@ class TestExecutor:
         self.test_suite.save()
         SUITE_STOP_SIGNALS.pop(self.test_suite.id, None)  # 清除停止信号，避免影响下次运行
 
-    def execute_test_case_playwright_no_db(self, case_data):
+    def execute_test_case_playwright_no_db(self, case_data, case_execution_id=None):
         """使用 Playwright 执行单个测试用例（不访问数据库）
 
         Args:
@@ -776,8 +813,10 @@ class TestExecutor:
                 step_data['_just_switched_tab'] = just_switched_tab
                 just_switched_tab = False  # 重置标志
                 
-                step_result = self.execute_step_playwright(step_data)
-                
+                step_result = self.execute_step_with_self_heal(
+                    step_data, case_execution_id=case_execution_id
+                )
+
                 # Debug: Log which page we're using
                 print(f"📄 步骤 {step_data['step_number']} 执行完成")
                 print(f"   使用的page URL: {self.current_page.url}")
@@ -896,7 +935,169 @@ class TestExecutor:
                 })
 
         result['end_time'] = datetime.now().isoformat()
+        self._aggregate_case_diagnosis(result)
         return result
+
+    def _step_with_override(self, step_data, loc):
+        """用指定定位器覆盖 step_data['element']，返回新的 step_data（不修改原对象）。"""
+        if loc is None:
+            return step_data
+        run = dict(step_data)
+        el = run.get('element')
+        if el:
+            el = dict(el)
+            if loc.get('value') is not None:
+                el['locator_value'] = loc['value']
+            if loc.get('strategy') is not None:
+                el['locator_strategy'] = loc['strategy']
+            run['element'] = el
+        return run
+
+    def execute_step_with_self_heal(self, step_data, case_execution_id=None):
+        """执行单步并支持定位器自愈。
+
+        - 仅对「定位/交互/超时类」失败轮换备用定位器重试；
+        - 「断言类」失败立即终止，绝不自愈（避免掩盖真实 bug）；
+        - 返回结果附带 failure_category/failure_hint/retry_count/self_healed 供上层聚合。
+        """
+        from apps.execution_common.diagnosis import classify_from_message
+        from apps.execution_common.models import FailureCategory
+
+        element = step_data.get('element')
+        locators = step_data.get('all_locators') or []
+        if element and locators:
+            candidates = locators
+        else:
+            candidates = [None]
+
+        # 自愈可尝试的分类（定位/交互/超时类），断言类绝不自愈
+        self_heal_cats = {
+            FailureCategory.LOCATOR_NOT_FOUND,
+            FailureCategory.ELEMENT_NOT_FOUND,
+            FailureCategory.ELEMENT_NOT_INTERACTABLE,
+            FailureCategory.TIMEOUT,
+            FailureCategory.NETWORK_TIMEOUT,
+            FailureCategory.CONNECTION_ERROR,
+        }
+
+        last_result = None
+        retry_count = 0
+        success_index = -1
+
+        for idx, loc in enumerate(candidates):
+            run_data = self._step_with_override(step_data, loc)
+            last_result = self.execute_step_playwright(run_data)
+            if last_result['success']:
+                success_index = idx
+                break
+            category, _ = classify_from_message(last_result.get('error') or '', chain='UI')
+            # 仅定位/交互/超时类尝试切换备用定位器自愈
+            if category in self_heal_cats and idx < len(candidates) - 1:
+                retry_count += 1
+                continue
+            break
+
+        # 超时/连接类瞬时抖动：定位器用尽后再用主定位器重试一次
+        if last_result is not None and not last_result['success']:
+            category, _ = classify_from_message(last_result.get('error') or '', chain='UI')
+            if category in (FailureCategory.TIMEOUT, FailureCategory.NETWORK_TIMEOUT, FailureCategory.CONNECTION_ERROR):
+                retry_count += 1
+                last_result = self.execute_step_playwright(step_data)
+                if last_result['success']:
+                    success_index = 0
+
+        # 回填诊断字段
+        if last_result is None:
+            last_result = {
+                'step_number': step_data.get('step_number'),
+                'action_type': step_data.get('action_type'),
+                'description': step_data.get('description'),
+                'success': False,
+                'error': '无可用定位器',
+            }
+
+        if last_result['success']:
+            last_result['self_healed'] = bool(success_index > 0 or retry_count > 0)
+            last_result['failure_category'] = None
+            last_result['failure_hint'] = ''
+        else:
+            category, hint = classify_from_message(last_result.get('error') or '', chain='UI')
+            last_result['failure_category'] = category.value if category else None
+            last_result['failure_hint'] = hint or ''
+            last_result['self_healed'] = False
+        last_result['retry_count'] = retry_count
+        return last_result
+
+    def _aggregate_case_diagnosis(self, case_result):
+        """从单用例结果(steps)聚合诊断字段到 result 顶层。"""
+        from apps.execution_common.diagnosis import classify_from_message
+
+        steps = case_result.get('steps') or []
+        retry_count = 0
+        self_healed = False
+        failed_step = None
+        for s in steps:
+            retry_count += int(s.get('retry_count') or 0)
+            if s.get('self_healed'):
+                self_healed = True
+            if not s.get('success') and failed_step is None:
+                failed_step = s
+
+        case_result['retry_count'] = retry_count
+        case_result['self_healed'] = self_healed
+
+        if case_result.get('status') == 'failed' and failed_step is not None:
+            cat = failed_step.get('failure_category')
+            hint = failed_step.get('failure_hint')
+            if not cat:
+                cat, hint = classify_from_message(case_result.get('error') or '', chain='UI')
+                cat = cat.value if cat else None
+            case_result['failure_category'] = cat
+            case_result['failure_hint'] = hint or ''
+        else:
+            case_result['failure_category'] = None
+            case_result['failure_hint'] = ''
+
+        # 证据摘要
+        shots = case_result.get('screenshots') or []
+        if case_result.get('status') == 'failed':
+            step_no = failed_step.get('step_number') if failed_step else '?'
+            case_result['evidence_summary'] = (
+                f"失败步骤: 第{step_no}步; 分类: {case_result['failure_category'] or 'UNKNOWN'}; "
+                f"自愈重试: {retry_count}次; 失败截图: {len(shots)}张"
+            )
+        else:
+            summary = f"通过; 自愈重试: {retry_count}次"
+            if self_healed:
+                summary += "; 已自愈"
+            case_result['evidence_summary'] = summary
+        return case_result
+
+    def _record_ui_evidence(self, case_execution_id, case_result):
+        """把失败截图写入 ExecutionEvidence，形成可回溯证据链。"""
+        if not case_execution_id:
+            return
+        try:
+            from apps.execution_common.evidence import record_evidence
+            from apps.execution_common.models import ChainType
+            shots = case_result.get('screenshots') or []
+            for idx, shot in enumerate(shots):
+                if not shot.get('url'):
+                    continue
+                record_evidence(
+                    chain=ChainType.UI,
+                    execution_id=str(case_execution_id),
+                    evidence_type='SCREENSHOT',
+                    payload={
+                        'url': shot['url'],
+                        'description': shot.get('description', ''),
+                        'step_number': shot.get('step_number'),
+                        'timestamp': shot.get('timestamp'),
+                    },
+                    step_key=str(shot.get('step_number') or idx),
+                )
+        except Exception as ev_err:
+            print(f"⚠️ 记录 UI 证据失败: {ev_err}")
 
     def execute_test_case_playwright(self, page, case_data):
         self.current_page = page

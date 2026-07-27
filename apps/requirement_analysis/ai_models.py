@@ -6,13 +6,37 @@ AI模型配置和服务
 from django.db import models
 from django.contrib.auth import get_user_model
 import json
+import time
 import httpx
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _ai_log_fail(meta, config, t0, msg):
+    if not meta:
+        return
+    try:
+        from apps.ai_eval.calllog import record_ai_call
+        record_ai_call(
+            module=meta.get("module", "requirement_analysis"),
+            feature=meta.get("feature", ""),
+            provider=config.get_model_type_display() if config else "",
+            model_name=getattr(config, "model_name", "") or "",
+            model_config_id=getattr(config, "id", None),
+            prompt_version_id=meta.get("prompt_version_id"),
+            prompt_key=meta.get("prompt_key", ""),
+            project_id=meta.get("project_id"),
+            user_id=meta.get("user_id"),
+            status="failure",
+            error=str(msg)[:500],
+            latency_ms=int((time.monotonic() - t0) * 1000) if t0 else None,
+        )
+    except Exception:
+        pass
 
 
 class AIModelConfig(models.Model):
@@ -139,7 +163,7 @@ class AIModelService:
     """AI模型服务类"""
     
     @staticmethod
-    async def call_openai_compatible_api(config: AIModelConfig, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    async def call_openai_compatible_api(config: AIModelConfig, messages: List[Dict[str, str]], *, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """调用OpenAI兼容格式的API"""
         headers = {
             'Authorization': f'Bearer {config.api_key}',
@@ -174,6 +198,7 @@ class AIModelService:
         else:
             url = base_url
             
+        t0 = time.monotonic()
         try:
             # Increase timeout to 120s for long generation tasks
             async with httpx.AsyncClient(timeout=120.0) as client:
@@ -188,20 +213,46 @@ class AIModelService:
                     logger.error(f"API调用返回错误: Status={response.status_code}, Body={error_detail}")
                     
                 response.raise_for_status()
-                return response.json()
+                j = response.json()
+                if meta is not None:  # #261 成本观测
+                    try:
+                        from apps.ai_eval.calllog import record_ai_call
+                        usage = j.get("usage") or {}
+                        record_ai_call(
+                            module=meta.get("module", "requirement_analysis"),
+                            feature=meta.get("feature", ""),
+                            provider=config.get_model_type_display(),
+                            model_name=config.model_name,
+                            model_config_id=config.id,
+                            prompt_version_id=meta.get("prompt_version_id"),
+                            prompt_key=meta.get("prompt_key", ""),
+                            project_id=meta.get("project_id"),
+                            user_id=meta.get("user_id"),
+                            input_tokens=usage.get("prompt_tokens", 0) or 0,
+                            output_tokens=usage.get("completion_tokens", 0) or 0,
+                            total_tokens=usage.get("total_tokens", 0) or 0,
+                            status="success",
+                            latency_ms=int((time.monotonic() - t0) * 1000),
+                        )
+                    except Exception:
+                        pass
+                return j
         except httpx.HTTPStatusError as e:
             provider_name = config.get_model_type_display()
             error_msg = f"{provider_name} API返回错误 {e.response.status_code}: {e.response.text}"
             logger.error(error_msg)
+            _ai_log_fail(meta, config, t0, error_msg)  # #261 成本观测
             raise Exception(error_msg)
         except httpx.TimeoutException as e:
             provider_name = config.get_model_type_display()
             logger.error(f"{provider_name} API请求超时: {repr(e)}")
+            _ai_log_fail(meta, config, t0, f"{provider_name} API请求超时")  # #261 成本观测
             raise Exception(f"{provider_name} API请求超时，请稍后再试或检查网络连接")
         except Exception as e:
             provider_name = config.get_model_type_display()
             # Use repr(e) to capture the full exception type and message, especially if str(e) is empty
             logger.error(f"{provider_name} API调用失败: {repr(e)}")
+            _ai_log_fail(meta, config, t0, f"{provider_name} API调用失败: {str(e) or repr(e)}")  # #261 成本观测
             raise Exception(f"{provider_name} API调用失败: {str(e) or repr(e)}")
     
     @staticmethod

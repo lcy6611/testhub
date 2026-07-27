@@ -401,7 +401,10 @@ async def _suggest_via_ai_async(
         {"role": "user", "content": prompt},
     ]
     try:
-        response = await AIModelService.call_openai_compatible_api(config, messages, min_tokens=1024)
+        response = await AIModelService.call_openai_compatible_api(
+            config, messages, min_tokens=1024,
+            meta={"module": "knowledge_graph", "feature": "graph_suggest"},
+        )
         content = ((response.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
     except Exception as exc:
         logger.warning("AI 图谱边建议失败: %s", exc, exc_info=True)

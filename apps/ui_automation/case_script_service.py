@@ -196,7 +196,10 @@ def structurize_case(tc):
     try:
         close_old_connections()
         resp = asyncio.run(
-            AIModelService.call_openai_compatible_api(cfg, messages, min_tokens=1024)
+            AIModelService.call_openai_compatible_api(
+                cfg, messages, min_tokens=1024,
+                meta={"module": "ui_automation", "feature": "case_script_struct"},
+            )
         )
         text = resp['choices'][0]['message']['content']
         data = _extract_json_array(text)

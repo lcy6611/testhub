@@ -93,6 +93,22 @@ def run_generation_task(task_pk: int) -> None:
         prev = (task_obj.generation_log or "").strip()
         new_log = f"{prev}\n{entry}".strip() if prev else entry
         TestCaseGenerationTask.objects.filter(pk=task_pk).update(generation_log=new_log)
+        # #261 成本观测：需求生成是最大 AI 消耗，落库 tokens/cost
+        try:
+            from apps.ai_eval.calllog import record_ai_call
+            usage = meta.get("usage") or {}
+            record_ai_call(
+                module="requirement_analysis",
+                feature=f"generate:{phase}",
+                model_name=meta.get("model") or "",
+                user_id=getattr(t, "created_by_id", None),
+                input_tokens=usage.get("prompt_tokens", 0) or 0,
+                output_tokens=usage.get("completion_tokens", 0) or 0,
+                total_tokens=usage.get("total_tokens", 0) or 0,
+                status="success",
+            )
+        except Exception:
+            pass
 
     try:
         TestCaseGenerationTask.objects.filter(pk=task_pk).update(
@@ -336,6 +352,22 @@ def run_refinement_task(task_pk: int, refinement_instructions: str) -> None:
         prev = (task_obj.generation_log or "").strip()
         new_log = f"{prev}\n{entry}".strip() if prev else entry
         TestCaseGenerationTask.objects.filter(pk=task_pk).update(generation_log=new_log)
+        # #261 成本观测：需求生成是最大 AI 消耗，落库 tokens/cost
+        try:
+            from apps.ai_eval.calllog import record_ai_call
+            usage = meta.get("usage") or {}
+            record_ai_call(
+                module="requirement_analysis",
+                feature=f"generate:{phase}",
+                model_name=meta.get("model") or "",
+                user_id=getattr(t, "created_by_id", None),
+                input_tokens=usage.get("prompt_tokens", 0) or 0,
+                output_tokens=usage.get("completion_tokens", 0) or 0,
+                total_tokens=usage.get("total_tokens", 0) or 0,
+                status="success",
+            )
+        except Exception:
+            pass
 
     try:
         TestCaseGenerationTask.objects.filter(pk=task_pk).update(

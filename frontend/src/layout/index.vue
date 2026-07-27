@@ -398,6 +398,14 @@
               <span>发布门禁</span>
             </el-menu-item>
           </template>
+
+          <!-- AI 评测与反馈闭环模块菜单 -->
+          <template v-else-if="currentModule === 'ai-eval'">
+            <el-menu-item index="/ai-eval/dashboard">
+              <el-icon><DataBoard /></el-icon>
+              <span>AI 评测中心</span>
+            </el-menu-item>
+          </template>
         </el-menu>
 
         <!-- Hermes 数字人形象（仅在 Hermes 模块显示；位于 el-menu 之下，高度自适应不溢出） -->
@@ -549,6 +557,7 @@ const currentModule = computed(() => {
   if (route.path.startsWith('/performance-testing')) return 'performance-testing'
   if (route.path.startsWith('/ops-tools')) return 'ops-tools'
   if (route.path.startsWith('/defects')) return 'defects'
+  if (route.path.startsWith('/ai-eval')) return 'ai-eval'
   return ''
 })
 
@@ -563,7 +572,8 @@ const moduleName = computed(() => {
     'configuration': '配置中心',
     'performance-testing': '性能测试',
     'ops-tools': '运维工具',
-    'defects': '质量门禁'
+    'defects': '质量门禁',
+    'ai-eval': 'AI 评测'
   }
   return map[currentModule.value] || ''
 })
@@ -684,6 +694,7 @@ const breadcrumbTitle = computed(() => {
     '/ops-tools/files': '内网文件传输',
 
     '/defects/quality-gate': '发布门禁',
+    '/ai-eval/dashboard': 'AI 评测中心',
 
     '/profile': '个人设置'
   }

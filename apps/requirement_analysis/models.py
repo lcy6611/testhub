@@ -8,13 +8,65 @@ from .kb_hub.models import (
     KbSource,
 )
 import json
+import time
 import httpx
 import asyncio
 from contextvars import ContextVar
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# === #261 AI 成本观测：best-effort 记录每次 LLM 调用，不阻塞主流程 ===
+def _ai_log_success(meta, config, merged, t0):
+    if not meta:
+        return
+    try:
+        from apps.ai_eval.calllog import record_ai_call
+        usage = (merged or {}).get("usage") or {}
+        record_ai_call(
+            module=meta.get("module", "requirement_analysis"),
+            feature=meta.get("feature", ""),
+            provider=config.get_model_type_display(),
+            model_name=config.model_name,
+            model_config_id=config.id,
+            prompt_version_id=meta.get("prompt_version_id"),
+            prompt_key=meta.get("prompt_key", ""),
+            project_id=meta.get("project_id"),
+            user_id=meta.get("user_id"),
+            input_tokens=usage.get("prompt_tokens", 0) or 0,
+            output_tokens=usage.get("completion_tokens", 0) or 0,
+            total_tokens=usage.get("total_tokens", 0) or 0,
+            status="success",
+            latency_ms=int((time.monotonic() - t0) * 1000) if t0 else None,
+        )
+    except Exception:
+        pass
+
+
+def _ai_log_fail(meta, config, t0, msg):
+    if not meta:
+        return
+    try:
+        from apps.ai_eval.calllog import record_ai_call
+        record_ai_call(
+            module=meta.get("module", "requirement_analysis"),
+            feature=meta.get("feature", ""),
+            provider=config.get_model_type_display() if config else "",
+            model_name=getattr(config, "model_name", "") or "",
+            model_config_id=getattr(config, "id", None),
+            prompt_version_id=meta.get("prompt_version_id"),
+            prompt_key=meta.get("prompt_key", ""),
+            project_id=meta.get("project_id"),
+            user_id=meta.get("user_id"),
+            status="failure",
+            error=str(msg)[:500],
+            latency_ms=int((time.monotonic() - t0) * 1000) if t0 else None,
+        )
+    except Exception:
+        pass
+
 
 
 class RequirementDocument(models.Model):
@@ -512,14 +564,18 @@ class AIModelService:
     @staticmethod
     def _build_api_payload(config, messages: List[Dict[str, str]], *, stream: bool, min_tokens: int = 0) -> Dict[str, Any]:
         max_tokens = AIModelService._resolve_max_tokens(config, min_tokens)
-        return {
+        payload = {
             "model": config.model_name,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": getattr(config, "temperature", 0.7),
             "top_p": getattr(config, "top_p", 0.9),
             "stream": stream,
-        }, max_tokens
+        }
+        # 流式场景显式请求 usage（兼容网关才生效，不兼容则忽略，无副作用）
+        if stream:
+            payload["stream_options"] = {"include_usage": True}
+        return payload, max_tokens
 
     @staticmethod
     def _resolve_chat_completions_url(config) -> str:
@@ -580,6 +636,7 @@ class AIModelService:
         messages: List[Dict[str, str]],
         *,
         min_tokens: int = 0,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """调用OpenAI兼容格式的API"""
         headers = {
@@ -592,6 +649,7 @@ class AIModelService:
         )
         url = AIModelService._resolve_chat_completions_url(config)
 
+        t0 = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=AIModelService.API_TIMEOUT_SECONDS) as client:
                 merged: Dict[str, Any] = {}
@@ -643,6 +701,7 @@ class AIModelService:
                     merged["choices"][0]["message"]["content"] = "".join(merged_content_parts)
                 if last_usage:
                     merged["usage"] = last_usage
+                _ai_log_success(meta, config, merged, t0)  # #261 成本观测
                 AIModelService._last_call_meta.set(
                     {
                         "mode": "blocking",
@@ -657,15 +716,18 @@ class AIModelService:
             provider_name = config.get_model_type_display()
             error_msg = f"{provider_name} API返回错误 {e.response.status_code}: {e.response.text}"
             logger.error(error_msg)
+            _ai_log_fail(meta, config, t0, error_msg)  # #261 成本观测
             raise Exception(error_msg)
         except httpx.TimeoutException as e:
             provider_name = config.get_model_type_display()
             logger.error(f"{provider_name} API请求超时: {repr(e)}")
+            _ai_log_fail(meta, config, t0, f"{provider_name} API请求超时")  # #261 成本观测
             raise Exception(f"{provider_name} API请求超时，请稍后再试或检查网络连接")
         except Exception as e:
             provider_name = config.get_model_type_display()
             # Use repr(e) to capture the full exception type and message, especially if str(e) is empty
             logger.error(f"{provider_name} API调用失败: {repr(e)}")
+            _ai_log_fail(meta, config, t0, f"{provider_name} API调用失败: {str(e) or repr(e)}")  # #261 成本观测
             raise Exception(f"{provider_name} API调用失败: {str(e) or repr(e)}")
     
     @staticmethod
@@ -688,6 +750,7 @@ class AIModelService:
         full_content: List[str] = []
         continuation = 0
         last_finish_reason: str = ""
+        last_usage: Dict[str, Any] = {}  # #261 累计流式 usage
 
         async def _stream_once(payload: Dict[str, Any]) -> str:
             nonlocal continuation
@@ -712,6 +775,7 @@ class AIModelService:
                         usage = j.get("usage") or {}
                         if usage:
                             stream_usage = usage
+                            last_usage.update(usage)  # #261 累计
 
                         choices = (j.get("choices") or [{}])
                         c0 = choices[0] or {}
@@ -758,6 +822,7 @@ class AIModelService:
                 "finish_reason": last_finish_reason or "",
                 "max_tokens": effective_max_tokens,
                 "model": getattr(config, "model_name", None),
+                "usage": last_usage,  # #261 成本观测
             }
         )
         return "".join(full_content)

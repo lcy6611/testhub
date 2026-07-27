@@ -745,6 +745,20 @@ const routes = [
       }
     ]
   },
+  // AI 评测与反馈闭环
+  {
+    path: '/ai-eval',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: 'dashboard' },
+      {
+        path: 'dashboard',
+        name: 'AIEval',
+        component: () => import('@/views/ai-eval/AIEvalCenter.vue')
+      }
+    ]
+  },
   // ====== 知识中枢（2026-07-24 v3.1：下沉为配置中心的二级折叠子菜单）======
   // 顶层只保留一条旧链接兜底 redirect，所有子路由挂在 /configuration/knowledge-hub 下
   {

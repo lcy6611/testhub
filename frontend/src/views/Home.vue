@@ -112,6 +112,24 @@
           <h3>运维工具</h3>
           <p>Text2SQL、日志查询、数据库连接、文件传输</p>
         </div>
+
+        <!-- 质量门禁（需求→缺陷闭环 #260） -->
+        <div class="nav-card" @click="handleNavigate('defects')" role="button" tabindex="0">
+          <div class="card-icon defects-icon">
+            <el-icon><Warning /></el-icon>
+          </div>
+          <h3>质量门禁</h3>
+          <p>需求到缺陷闭环、覆盖率与发布门禁</p>
+        </div>
+
+        <!-- AI 评测（#261） -->
+        <div class="nav-card" @click="handleNavigate('ai-eval')" role="button" tabindex="0">
+          <div class="card-icon ai-eval-icon">
+            <el-icon><DataBoard /></el-icon>
+          </div>
+          <h3>AI 评测</h3>
+          <p>提示词版本、成本观测、效果看板与反馈</p>
+        </div>
       </div>
     </div>
   </div>
@@ -121,7 +139,7 @@
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MagicStick, Link, Monitor, DataLine, Cpu, Setting, ChatDotRound, UserFilled, ArrowDown, Tools } from '@element-plus/icons-vue'
+import { MagicStick, Link, Monitor, DataLine, Cpu, Setting, ChatDotRound, UserFilled, ArrowDown, Tools, Warning, DataBoard } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -156,7 +174,9 @@ const handleNavigate = (type) => {
     'assistant': '/ai-generation/assistant',
     'config': '/configuration/ai-model',
     'perf': '/performance-testing/scripts',
-    'ops-tools': '/ops-tools/text2sql'
+    'ops-tools': '/ops-tools/text2sql',
+    'defects': '/defects/quality-gate',
+    'ai-eval': '/ai-eval/dashboard'
   }
 
   if (routes[type]) {
@@ -338,6 +358,16 @@ const handleNavigate = (type) => {
   &.ops-icon {
     background: #e6f7ff;
     color: #1890ff;
+  }
+
+  &.defects-icon {
+    background: #fff1f0;
+    color: #f5222d;
+  }
+
+  &.ai-eval-icon {
+    background: #f9f0ff;
+    color: #722ed1;
   }
 }
 

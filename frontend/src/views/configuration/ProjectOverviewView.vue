@@ -188,6 +188,173 @@
           </el-descriptions>
         </el-card>
       </div>
+
+      <!-- 第六排：发布门禁（合并自质量门禁页，随项目切换） -->
+      <template v-if="selectedProjectId">
+        <h3 class="section-title">🚦 发布门禁</h3>
+        <div class="grid-note">
+          💡 <b>需求→缺陷闭环</b>的质量关卡：通过率 / 覆盖率 / 未关闭缺陷三维判定发布结论。可在此保存发布结论、登记缺陷。
+        </div>
+
+        <el-row :gutter="16">
+          <!-- 发布门禁结论 -->
+          <el-col :span="10">
+            <el-card shadow="never" class="block">
+              <template #header>
+                <div class="card-head">
+                  <span>发布门禁</span>
+                  <el-button size="small" type="success" :loading="gateSaving" @click="saveGateConclusion">保存发布结论</el-button>
+                </div>
+              </template>
+              <div v-if="gate" class="gate-body">
+                <el-alert
+                  :title="gateConclusionText"
+                  :type="gateConclusionType"
+                  :closable="false"
+                  show-icon
+                  class="conclusion"
+                />
+                <el-descriptions :column="2" border size="small" class="metrics">
+                  <el-descriptions-item label="通过率">{{ gate.metrics.pass_rate }}%</el-descriptions-item>
+                  <el-descriptions-item label="需求通过覆盖率">{{ gate.metrics.coverage_rate }}%</el-descriptions-item>
+                  <el-descriptions-item label="关联覆盖率">{{ gate.metrics.linked_rate }}%</el-descriptions-item>
+                  <el-descriptions-item label="执行覆盖率">{{ gate.metrics.executed_rate }}%</el-descriptions-item>
+                  <el-descriptions-item label="未关闭缺陷">
+                    {{ gate.metrics.open_defects }}
+                    <span class="sev">
+                      (S1:{{ gate.metrics.open_by_severity.S1 }}
+                       S2:{{ gate.metrics.open_by_severity.S2 }}
+                       S3:{{ gate.metrics.open_by_severity.S3 }}
+                       S4:{{ gate.metrics.open_by_severity.S4 }})
+                    </span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="阻塞">{{ gate.metrics.blocked }}</el-descriptions-item>
+                </el-descriptions>
+                <div class="reasons">
+                  <div class="reasons-title">判定依据</div>
+                  <ul>
+                    <li v-for="(r, i) in gate.reasons" :key="i">{{ r }}</li>
+                  </ul>
+                </div>
+              </div>
+              <el-empty v-else :description="gateLoading ? '加载中…' : '暂无门禁数据'" />
+            </el-card>
+          </el-col>
+
+          <!-- 需求三层覆盖率 -->
+          <el-col :span="14">
+            <el-card shadow="never" class="block">
+              <template #header><span>需求三层覆盖率</span></template>
+              <div v-if="coverage" class="coverage-body">
+                <div class="rate-row">
+                  <span class="rate-label">关联用例</span>
+                  <el-progress :percentage="coverage.linked_rate" :stroke-width="14" />
+                  <span class="rate-num">{{ coverage.linked }}/{{ coverage.total_requirements }}</span>
+                </div>
+                <div class="rate-row">
+                  <span class="rate-label">已执行</span>
+                  <el-progress :percentage="coverage.executed_rate" :stroke-width="14" color="#e6a23c" />
+                  <span class="rate-num">{{ coverage.executed }}/{{ coverage.total_requirements }}</span>
+                </div>
+                <div class="rate-row">
+                  <span class="rate-label">已通过</span>
+                  <el-progress :percentage="coverage.passed_rate" :stroke-width="14" color="#67c23a" />
+                  <span class="rate-num">{{ coverage.passed }}/{{ coverage.total_requirements }}</span>
+                </div>
+
+                <el-table :data="coverage.items" size="small" max-height="320" class="cov-table">
+                  <el-table-column prop="requirement_name" label="需求" min-width="160" show-overflow-tooltip />
+                  <el-table-column label="级别" width="70">
+                    <template #default="{ row }">{{ gateLevelText[row.requirement_level] || row.requirement_level }}</template>
+                  </el-table-column>
+                  <el-table-column label="关联" width="70" align="center">
+                    <template #default="{ row }"><el-tag :type="row.linked ? 'success' : 'info'" size="small">{{ row.linked ? '是' : '否' }}</el-tag></template>
+                  </el-table-column>
+                  <el-table-column label="执行" width="70" align="center">
+                    <template #default="{ row }"><el-tag :type="row.executed ? 'warning' : 'info'" size="small">{{ row.executed ? '是' : '否' }}</el-tag></template>
+                  </el-table-column>
+                  <el-table-column label="通过" width="70" align="center">
+                    <template #default="{ row }"><el-tag :type="row.passed ? 'success' : 'danger'" size="small">{{ row.passed ? '是' : '否' }}</el-tag></template>
+                  </el-table-column>
+                </el-table>
+              </div>
+              <el-empty v-else description="暂无需求数据" />
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <!-- 缺陷列表 -->
+        <el-card shadow="never" class="block">
+          <template #header>
+            <div class="card-head">
+              <span>缺陷列表（{{ defects.length }}）</span>
+              <el-button size="small" type="primary" @click="openGateDefect">新建缺陷</el-button>
+            </div>
+          </template>
+          <el-table :data="defects" size="small" stripe>
+            <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
+            <el-table-column label="严重程度" width="90" align="center">
+              <template #default="{ row }"><el-tag :type="gateSevType[row.severity]" size="small">{{ gateSevText[row.severity] }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="状态" width="90" align="center">
+              <template #default="{ row }"><el-tag :type="gateStatusType[row.status]" size="small">{{ gateStatusText[row.status] }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="requirement" label="关联需求ID" width="110" align="center" />
+            <el-table-column prop="created_at" label="创建时间" min-width="150" />
+            <el-table-column label="操作" width="140" align="center">
+              <template #default="{ row }">
+                <el-button size="small" type="danger" plain @click="removeGateDefect(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <!-- 发布结论记录 -->
+        <el-card shadow="never" class="block" v-if="gateConclusions.length">
+          <template #header><span>发布结论记录</span></template>
+          <el-table :data="gateConclusions" size="small" stripe>
+            <el-table-column label="结论" width="120" align="center">
+              <template #default="{ row }"><el-tag :type="conclusionTag(row.conclusion)" size="small">{{ conclusionLabel(row.conclusion) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="metrics.pass_rate" label="通过率" width="90" align="center" />
+            <el-table-column prop="metrics.coverage_rate" label="覆盖率" width="90" align="center" />
+            <el-table-column prop="metrics.open_defects" label="未关闭缺陷" width="110" align="center" />
+            <el-table-column prop="created_at" label="保存时间" min-width="150" />
+            <el-table-column prop="note" label="备注" min-width="160" show-overflow-tooltip />
+          </el-table>
+        </el-card>
+
+        <!-- 新建缺陷弹窗 -->
+        <el-dialog v-model="gateDialog" title="新建缺陷" width="520px">
+          <el-form :model="gateForm" label-width="90px">
+            <el-form-item label="标题" required>
+              <el-input v-model="gateForm.title" placeholder="缺陷标题" />
+            </el-form-item>
+            <el-form-item label="严重程度">
+              <el-select v-model="gateForm.severity" style="width: 100%">
+                <el-option v-for="s in sevOptions" :key="s.value" :label="s.label" :value="s.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select v-model="gateForm.status" style="width: 100%">
+                <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="关联需求">
+              <el-select v-model="gateForm.requirement" filterable clearable placeholder="可选" style="width: 100%">
+                <el-option v-for="r in gateRequirements" :key="r.id" :label="`${r.requirement_id} ${r.requirement_name}`" :value="r.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="描述">
+              <el-input v-model="gateForm.description" type="textarea" :rows="3" />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="gateDialog = false">取消</el-button>
+            <el-button type="primary" :loading="gateSubmitting" @click="submitGateDefect">提交</el-button>
+          </template>
+        </el-dialog>
+      </template>
     </template>
   </div>
 </template>
@@ -195,15 +362,158 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getProjectOverview, unwrap } from '@/api/project-overview'
 import { getProjects } from '@/api/performance' // 复用现有项目列表 API
+import { getBusinessRequirements } from '@/api/requirement-analysis'
+import {
+  getDefects, createDefect, deleteDefect,
+  getRequirementCoverage, getQualityGate, saveQualityGate, getReleaseConclusions
+} from '@/api/defects'
 
 const router = useRouter()
 const projects = ref([])
 const selectedProjectId = ref(null)
 const overview = ref(null)
 const loading = ref(false)
+
+// ===== 发布门禁（合并自质量门禁页）=====
+const gate = ref(null)
+const gateLoading = ref(false)
+const coverage = ref(null)
+const defects = ref([])
+const gateConclusions = ref([])
+const gateSaving = ref(false)
+const gateSubmitting = ref(false)
+const gateDialog = ref(false)
+const gateRequirements = ref([])
+const gateForm = ref({ title: '', severity: 'S3', status: 'open', requirement: null, description: '' })
+const gateConclusionText = ref('')
+const gateConclusionType = ref('info')
+
+const sevOptions = [
+  { value: 'S1', label: '致命' }, { value: 'S2', label: '严重' },
+  { value: 'S3', label: '一般' }, { value: 'S4', label: '轻微' }
+]
+const statusOptions = [
+  { value: 'open', label: '待处理' }, { value: 'in_progress', label: '处理中' },
+  { value: 'resolved', label: '已修复' }, { value: 'closed', label: '已关闭' },
+  { value: 'reopened', label: '重新打开' }
+]
+const gateSevText = { S1: '致命', S2: '严重', S3: '一般', S4: '轻微' }
+const gateSevType = { S1: 'danger', S2: 'danger', S3: 'warning', S4: 'info' }
+const gateStatusText = { open: '待处理', in_progress: '处理中', resolved: '已修复', closed: '已关闭', reopened: '重新打开' }
+const gateStatusType = { open: 'info', in_progress: 'warning', resolved: 'success', closed: 'success', reopened: 'danger' }
+const gateLevelText = { high: '高', medium: '中', low: '低' }
+const conclusionLabel = (c) => ({ GO: '可发布', CONDITIONAL_GO: '有条件发布', NO_GO: '不可发布' }[c] || c)
+const conclusionTag = (c) => ({ GO: 'success', CONDITIONAL_GO: 'warning', NO_GO: 'danger' }[c] || 'info')
+
+function normalizeGate(list) {
+  if (Array.isArray(list)) return list
+  if (list && Array.isArray(list.results)) return list.results
+  return []
+}
+
+function resetGate() {
+  gate.value = null
+  coverage.value = null
+  defects.value = []
+  gateConclusions.value = []
+  gateConclusionText.value = ''
+  gateConclusionType.value = 'info'
+}
+
+async function loadGateRequirements() {
+  if (!selectedProjectId.value) return
+  try {
+    const res = await getBusinessRequirements({ project: selectedProjectId.value })
+    gateRequirements.value = normalizeGate(res.data || res)
+  } catch (e) { /* 忽略 */ }
+}
+
+async function loadGateData() {
+  if (!selectedProjectId.value) { resetGate(); return }
+  gateLoading.value = true
+  try {
+    const [cov, g, def, rel] = await Promise.all([
+      getRequirementCoverage({ project: selectedProjectId.value }),
+      getQualityGate({ project: selectedProjectId.value }),
+      getDefects({ project: selectedProjectId.value }),
+      getReleaseConclusions({ project: selectedProjectId.value }),
+    ])
+    coverage.value = cov?.data || cov
+    gate.value = g?.data || g
+    if (gate.value) {
+      gateConclusionText.value = conclusionLabel(gate.value.conclusion)
+      gateConclusionType.value = conclusionTag(gate.value.conclusion)
+    }
+    defects.value = normalizeGate(def?.data || def)
+    gateConclusions.value = normalizeGate(rel?.data || rel)
+  } catch (e) {
+    ElMessage.error('加载发布门禁数据失败：' + (e.message || e))
+  } finally {
+    gateLoading.value = false
+  }
+}
+
+async function saveGateConclusion() {
+  if (!selectedProjectId.value || !gate.value) return
+  gateSaving.value = true
+  try {
+    await saveQualityGate({ project: selectedProjectId.value, conclusion: gate.value.conclusion })
+    ElMessage.success('发布结论已保存')
+    const rel = await getReleaseConclusions({ project: selectedProjectId.value })
+    gateConclusions.value = normalizeGate(rel?.data || rel)
+  } catch (e) {
+    ElMessage.error('保存失败：' + (e.message || e))
+  } finally {
+    gateSaving.value = false
+  }
+}
+
+function openGateDefect() {
+  gateForm.value = { title: '', severity: 'S3', status: 'open', requirement: null, description: '' }
+  loadGateRequirements()
+  gateDialog.value = true
+}
+
+async function submitGateDefect() {
+  if (!gateForm.value.title.trim()) {
+    ElMessage.warning('请填写缺陷标题')
+    return
+  }
+  gateSubmitting.value = true
+  try {
+    await createDefect({
+      project: selectedProjectId.value,
+      title: gateForm.value.title,
+      severity: gateForm.value.severity,
+      status: gateForm.value.status,
+      requirement: gateForm.value.requirement || null,
+      description: gateForm.value.description,
+    })
+    ElMessage.success('缺陷已创建')
+    gateDialog.value = false
+    loadGateData()
+  } catch (e) {
+    ElMessage.error('创建失败：' + (e.message || e))
+  } finally {
+    gateSubmitting.value = false
+  }
+}
+
+async function removeGateDefect(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除缺陷「${row.title}」？`, '提示', { type: 'warning' })
+  } catch { return }
+  try {
+    await deleteDefect(row.id)
+    ElMessage.success('已删除')
+    loadGateData()
+  } catch (e) {
+    ElMessage.error('删除失败：' + (e.message || e))
+  }
+}
 
 const ENTITY_TYPE_LABEL = {
   Project: '项目',
@@ -247,7 +557,7 @@ const STATUS_TYPE_MAP = {
 function statusType(s) { return STATUS_TYPE_MAP[s] || 'info' }
 
 const onProjectChange = async () => {
-  if (!selectedProjectId.value) { overview.value = null; return }
+  if (!selectedProjectId.value) { overview.value = null; resetGate(); return }
   loading.value = true
   try {
     overview.value = unwrap(await getProjectOverview(selectedProjectId.value))
@@ -257,6 +567,8 @@ const onProjectChange = async () => {
   } finally {
     loading.value = false
   }
+  // 门禁数据随项目切换并行加载（独立 try，不影响概览渲染）
+  loadGateData()
 }
 
 // 6 个总览统计卡
@@ -678,4 +990,18 @@ watch(selectedProjectId, () => onProjectChange())
 .bar-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .bar-label { width: 100px; font-size: 12px; color: #606266; }
 .empty-tip { color: #909399; text-align: center; padding: 24px 0; font-size: 13px; }
+
+/* ===== 发布门禁（合并自质量门禁页）===== */
+.block { margin-bottom: 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; }
+.conclusion { margin-bottom: 14px; }
+.metrics { margin-bottom: 12px; }
+.sev { color: #909399; font-size: 12px; margin-left: 4px; }
+.reasons-title { font-weight: 600; margin: 8px 0 4px; }
+.reasons ul { margin: 0; padding-left: 18px; color: #606266; font-size: 13px; }
+.reasons li { margin: 2px 0; }
+.rate-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.rate-label { width: 70px; color: #606266; font-size: 13px; }
+.rate-num { width: 70px; text-align: right; color: #909399; font-size: 13px; }
+.cov-table { margin-top: 12px; }
 </style>

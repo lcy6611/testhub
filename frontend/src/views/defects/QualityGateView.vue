@@ -244,10 +244,14 @@ function normalize(list) {
 }
 
 async function loadProjects() {
-  const data = await getProjects()
-  projects.value = normalize(data)
-  if (!projectId.value && projects.value.length) {
-    projectId.value = projects.value[0].id
+  try {
+    const data = await getProjects()
+    projects.value = normalize(data)
+    if (!projectId.value && projects.value.length) {
+      projectId.value = projects.value[0].id
+    }
+  } catch (e) {
+    ElMessage.error('加载项目列表失败：' + (e?.response?.data?.detail || e?.message || e))
   }
 }
 

@@ -25,11 +25,11 @@
         </div>
 
         <div class="stat-cards" v-loading="statsLoading">
-          <el-card shadow="hover"><template #header>总调用次数</template><el-statistic :value="stats.totals.calls" /></el-card>
-          <el-card shadow="hover"><template #header>总 Tokens</template><el-statistic :value="stats.totals.total_tokens" /></el-card>
-          <el-card shadow="hover"><template #header>估算成本(元)</template><el-statistic :value="stats.totals.cost" :precision="4" /></el-card>
-          <el-card shadow="hover"><template #header>平均耗时(ms)</template><el-statistic :value="stats.totals.avg_latency_ms" /></el-card>
-          <el-card shadow="hover"><template #header>成功率</template><el-statistic :value="(stats.totals.success_rate * 100).toFixed(1)" suffix="%" /></el-card>
+          <el-card shadow="hover"><template #header>总调用次数</template><el-statistic :value="stats.totals.calls || 0" /></el-card>
+          <el-card shadow="hover"><template #header>总 Tokens</template><el-statistic :value="stats.totals.total_tokens || 0" /></el-card>
+          <el-card shadow="hover"><template #header>估算成本(元)</template><el-statistic :value="stats.totals.cost || 0" :precision="4" /></el-card>
+          <el-card shadow="hover"><template #header>平均耗时(ms)</template><el-statistic :value="stats.totals.avg_latency_ms || 0" /></el-card>
+          <el-card shadow="hover"><template #header>成功率</template><el-statistic :value="(stats.totals.success_rate || 0) * 100" :precision="1" suffix="%" /></el-card>
         </div>
 
         <el-row :gutter="16" style="margin-top: 16px">
@@ -312,7 +312,7 @@ const days = ref(30)
 const projects = ref([])
 
 // 看板
-const stats = reactive({ totals: {}, by_module: [], by_day: [], latest_eval: {} })
+const stats = reactive({ totals: { calls: 0, total_tokens: 0, cost: 0, avg_latency_ms: 0, success_rate: 0 }, by_module: [], by_day: [], latest_eval: {} })
 const statsLoading = ref(false)
 async function loadStats() {
   statsLoading.value = true
@@ -320,7 +320,13 @@ async function loadStats() {
     const params = { days: days.value }
     if (projectId.value) params.project_id = projectId.value
     const res = await getEvalStats(params)
-    Object.assign(stats, res.data || res)
+    const data = res?.data || res
+    if (data && typeof data === 'object') {
+      stats.totals = data.totals || { calls: 0, total_tokens: 0, cost: 0, avg_latency_ms: 0, success_rate: 0 }
+      stats.by_module = data.by_module || []
+      stats.by_day = data.by_day || []
+      stats.latest_eval = data.latest_eval || {}
+    }
   } catch (e) {
     ElMessage.error('加载看板失败')
   } finally {

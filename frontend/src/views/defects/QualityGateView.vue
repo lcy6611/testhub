@@ -245,8 +245,8 @@ function normalize(list) {
 
 async function loadProjects() {
   try {
-    const data = await getProjects()
-    projects.value = normalize(data)
+    const res = await getProjects()
+    projects.value = normalize(res.data || res)
     if (!projectId.value && projects.value.length) {
       projectId.value = projects.value[0].id
     }
@@ -265,11 +265,11 @@ async function loadAll() {
       getDefects({ project: projectId.value }),
       getReleaseConclusions({ project: projectId.value })
     ])
-    coverage.value = cov
-    gate.value = g
+    coverage.value = cov?.data || cov
+    gate.value = g?.data || g
     computedConclusion()
-    defects.value = normalize(def)
-    conclusions.value = normalize(rel)
+    defects.value = normalize(def?.data || def)
+    conclusions.value = normalize(rel?.data || rel)
   } catch (e) {
     ElMessage.error('加载失败：' + (e.message || e))
   } finally {
@@ -280,8 +280,8 @@ async function loadAll() {
 async function loadRequirements() {
   if (!projectId.value) return
   try {
-    const data = await getBusinessRequirements({ project: projectId.value })
-    requirements.value = normalize(data)
+    const res = await getBusinessRequirements({ project: projectId.value })
+    requirements.value = normalize(res.data || res)
   } catch (e) { /* 忽略 */ }
 }
 
@@ -301,7 +301,7 @@ async function saveConclusion() {
     await saveQualityGate({ project: projectId.value, conclusion: gate.value.conclusion })
     ElMessage.success('发布结论已保存')
     const rel = await getReleaseConclusions({ project: projectId.value })
-    conclusions.value = normalize(rel)
+    conclusions.value = normalize(rel?.data || rel)
   } catch (e) {
     ElMessage.error('保存失败：' + (e.message || e))
   } finally {

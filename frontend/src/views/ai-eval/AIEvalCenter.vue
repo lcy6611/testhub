@@ -235,6 +235,7 @@
 
         <el-dialog v-model="resultDialog" title="评测结果" width="820px">
           <el-alert v-if="currentRun" :title="`状态：${runStatusText(currentRun.status)}`" :type="runTagType(currentRun.status) === 'danger' ? 'error' : 'info'" :closable="false" style="margin-bottom: 12px" />
+          <el-alert v-if="currentRun && currentRun.status === 'failed' && currentRun.error" :title="`失败原因：${currentRun.error}`" type="error" :closable="false" style="margin-bottom: 12px" />
           <el-table :data="resultList" v-loading="resultLoading" size="small" border max-height="460">
             <el-table-column prop="case_name" label="用例" width="180" />
             <el-table-column label="得分" width="80">

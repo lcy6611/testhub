@@ -621,6 +621,7 @@ def run_agent(
     user_message: str,
     history: List[Dict[str, Any]] = None,
     system_prompt: str = None,
+    current_user=None,
 ) -> Generator[Dict[str, Any], None, None]:
     """
     运行 Agent 循环，yield 事件 dict。
@@ -746,7 +747,11 @@ def run_agent(
 
                     # 执行工具（同步）
                     try:
-                        result = execute_tool(tool_name, tool_args)
+                        # 注入当前用户供工具使用（创建缺陷/用例时需要报告人字段）
+                        tool_args_with_user = dict(tool_args)
+                        if current_user is not None and '_user' not in tool_args_with_user:
+                            tool_args_with_user['_user'] = current_user
+                        result = execute_tool(tool_name, tool_args_with_user)
                     except Exception as e:
                         logger.exception(f"工具 {tool_name} 执行异常")
                         result = {"error": f"工具执行异常: {str(e)}"}

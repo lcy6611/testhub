@@ -92,9 +92,45 @@ class TestCaseComment(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='评论者')
     content = models.TextField(verbose_name='评论内容')
     created_at = models.DateTimeField(default=timezone.now, verbose_name='评论时间')
-    
+
     class Meta:
         db_table = 'testcase_comments'
         verbose_name = '测试用例评论'
         verbose_name_plural = '测试用例评论'
+        ordering = ['-created_at']
+
+
+class CaseAnalysis(models.Model):
+    """AI 用例深入分析记录（Hoteam-AI 探索式分析）。"""
+    testcase = models.ForeignKey(
+        TestCase, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='analyses', verbose_name='所属用例'
+    )
+    requirement = models.ForeignKey(
+        'requirement_analysis.BusinessRequirement',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='case_analyses', verbose_name='关联需求'
+    )
+    ai_model = models.ForeignKey(
+        'requirement_analysis.AIModelConfig',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='case_analyses', verbose_name='AI 模型'
+    )
+    input_steps = models.JSONField(default=list, verbose_name='输入步骤')
+    prompt = models.TextField(blank=True, verbose_name='提示词')
+    suggestions = models.JSONField(default=list, verbose_name='建议补充步骤')
+    risks = models.JSONField(default=list, verbose_name='风险点')
+    summary = models.TextField(blank=True, verbose_name='总结')
+    tokens_used = models.IntegerField(default=0, verbose_name='Token 用量')
+    elapsed_ms = models.IntegerField(default=0, verbose_name='耗时(毫秒)')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='case_analyses', verbose_name='发起人'
+    )
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
+
+    class Meta:
+        db_table = 'case_analyses'
+        verbose_name = 'AI 用例分析'
+        verbose_name_plural = 'AI 用例分析'
         ordering = ['-created_at']

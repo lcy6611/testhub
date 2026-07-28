@@ -50,6 +50,7 @@
           <template #default="{ row }">
             <el-button size="small" type="primary" @click="goDashboard(row.id)">数据面板</el-button>
             <el-button size="small" @click="goDetail(row.id)">执行详情</el-button>
+            <el-button size="small" type="danger" plain @click="openReportDefect(row)">提 BUG</el-button>
             <el-button v-if="row.status === 'RUNNING' || row.status === 'QUEUED'" size="small" type="warning" @click="handleCancel(row.id)">取消</el-button>
           </template>
         </el-table-column>
@@ -75,6 +76,21 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getExecutions, cancelExecution } from '@/api/performance'
+
+const openReportDefect = (row) => {
+  // 性能测试"提 BUG"：携带执行上下文跳到问题管理页，用户选项目后保存（避免无 project 必填）
+  const title = `[性能测试] ${row.script_name || row.execution_id} 异常`
+  const desc = `执行ID：${row.execution_id}\n脚本：${row.script_name || ''}\n线程：${row.thread_count || 0}\n持续：${row.duration || 0}s\n状态：${row.status_display || row.status}\n开始：${row.started_at || '-'}\n完成：${row.completed_at || '-'}`
+  router.push({
+    path: '/defects',
+    query: {
+      preset_title: title,
+      preset_description: desc,
+      preset_source: 'performance',
+      preset_severity: 'S2'
+    }
+  })
+}
 
 const router = useRouter()
 const executions = ref([])

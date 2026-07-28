@@ -2176,6 +2176,70 @@ def _list_transfer_tasks(**kwargs) -> Dict[str, Any]:
     return {"total": qs.count(), "items": items}
 
 
+def _create_defect(**kwargs) -> Dict[str, Any]:
+    """创建一个缺陷（BUG）。供数字人在对话中识别到 bug 描述时调用。
+
+    必填：title, project_id；可选：severity, description, steps_to_reproduce, environment, assigned_to
+    """
+    from apps.defects.models import Defect
+    title = (kwargs.get("title") or "").strip()
+    project_id = kwargs.get("project_id")
+    if not title:
+        return {"error": "title 必填"}
+    if not project_id:
+        return {"error": "project_id 必填（用 list_projects 查询）"}
+    severity = kwargs.get("severity", "S3")
+    if severity not in ("S1", "S2", "S3", "S4"):
+        severity = "S3"
+
+    user = kwargs.get("_user")
+    if not user:
+        from apps.users.models import User
+        user = User.objects.first()
+
+    try:
+        defect = Defect.objects.create(
+            title=title,
+            project_id=project_id,
+            severity=severity,
+            description=kwargs.get("description", ""),
+            steps_to_reproduce=kwargs.get("steps_to_reproduce", ""),
+            environment=kwargs.get("environment", ""),
+            assigned_to_id=kwargs.get("assigned_to") or None,
+            source="hermes",
+            reported_by=user,
+        )
+        return {
+            "defect_id": defect.id,
+            "title": defect.title,
+            "severity": defect.severity,
+            "status": defect.status,
+            "message": f"已创建 BUG #{defect.id}，请在问题管理页查看详情。",
+        }
+    except Exception as e:
+        return {"error": f"创建失败: {e}"}
+
+
+def _list_defects(**kwargs) -> Dict[str, Any]:
+    """查询缺陷列表。可按项目/状态/严重度过滤。"""
+    from apps.defects.models import Defect
+    qs = Defect.objects.all().order_by("-created_at")
+    project_id = kwargs.get("project_id")
+    if project_id:
+        qs = qs.filter(project_id=project_id)
+    status = kwargs.get("status")
+    if status:
+        qs = qs.filter(status=status)
+    severity = kwargs.get("severity")
+    if severity:
+        qs = qs.filter(severity=severity)
+    limit = min(int(kwargs.get("limit", 20)), 100)
+    items = list(qs[:limit].values(
+        "id", "title", "severity", "status", "project_id", "source", "created_at",
+    ))
+    return {"total": qs.count(), "items": items}
+
+
 # ────────────────────────────── 工具注册表 ──────────────────────────────
 
 TOOL_REGISTRY: List[Dict[str, Any]] = [
@@ -3083,6 +3147,39 @@ TOOL_REGISTRY: List[Dict[str, Any]] = [
             "required": [],
         },
         "handler": _list_transfer_tasks,
+    },
+    {
+        "name": "create_defect",
+        "description": "在 TestHub 问题管理模块创建一个 BUG。数字人在用户描述了某个缺陷时调用。必填：title（一句话标题）和 project_id（先用 list_projects 获取）。可选：severity(S1致命/S2严重/S3一般/S4轻微)、description、steps_to_reproduce、environment、assigned_to(用户ID)。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "BUG 一句话标题"},
+                "project_id": {"type": "integer", "description": "所属项目 ID"},
+                "severity": {"type": "string", "enum": ["S1", "S2", "S3", "S4"], "default": "S3"},
+                "description": {"type": "string", "description": "详细描述"},
+                "steps_to_reproduce": {"type": "string", "description": "复现步骤"},
+                "environment": {"type": "string", "description": "环境信息如：Chrome 125 / Win11"},
+                "assigned_to": {"type": "integer", "description": "指派给的用户 ID"},
+            },
+            "required": ["title", "project_id"],
+        },
+        "handler": _create_defect,
+    },
+    {
+        "name": "list_defects",
+        "description": "查询缺陷列表。可按项目/状态/严重度过滤。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "integer", "description": "项目 ID"},
+                "status": {"type": "string", "enum": ["open", "in_progress", "resolved", "closed", "reopened"]},
+                "severity": {"type": "string", "enum": ["S1", "S2", "S3", "S4"]},
+                "limit": {"type": "integer", "default": 20},
+            },
+            "required": [],
+        },
+        "handler": _list_defects,
     },
 ]
 

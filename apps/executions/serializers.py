@@ -1,11 +1,23 @@
 from rest_framework import serializers
-from .models import TestPlan, TestRun, TestRunCase, TestRunCaseHistory
+from .models import TestPlan, TestRun, TestRunCase, TestRunCaseHistory, TestRunCaseStep
 from apps.testcases.models import TestCase
 from apps.users.serializers import UserSimpleSerializer
 
+
+class TestRunCaseStepSerializer(serializers.ModelSerializer):
+    """执行步骤（步骤级状态）序列化器。"""
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    executed_by_name = serializers.CharField(source='executed_by.username', read_only=True, default='')
+
+    class Meta:
+        model = TestRunCaseStep
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at', 'executed_at', 'executed_by']
+
+
 class TestRunCaseHistorySerializer(serializers.ModelSerializer):
     executed_by = UserSimpleSerializer(read_only=True)
-    
+
     class Meta:
         model = TestRunCaseHistory
         fields = ('id', 'status', 'actual_result', 'comments', 'executed_by', 'executed_at')
@@ -20,12 +32,14 @@ class TestRunCaseDetailSerializer(serializers.ModelSerializer):
     testcase = serializers.StringRelatedField()
     executed_by = UserSimpleSerializer(read_only=True)
     history = TestRunCaseHistorySerializer(many=True, read_only=True)
-    
+    step_records = TestRunCaseStepSerializer(many=True, read_only=True)
+    testcase_id = serializers.IntegerField(source='testcase.id', read_only=True)
+
     class Meta:
         model = TestRunCase
-        fields = ('id', 'testcase', 'status', 'priority', 'actual_result', 'comments', 
-                 'defects', 'elapsed_time', 'executed_by', 'executed_at', 'created_at', 
-                 'updated_at', 'history')
+        fields = ('id', 'testcase', 'testcase_id', 'status', 'priority', 'actual_result', 'comments',
+                 'defects', 'elapsed_time', 'executed_by', 'executed_at', 'created_at',
+                 'updated_at', 'history', 'step_records')
 
 class TestRunSerializer(serializers.ModelSerializer):
     run_cases = TestRunCaseSimpleSerializer(many=True, read_only=True)

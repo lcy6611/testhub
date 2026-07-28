@@ -1,8 +1,11 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Defect, ReleaseConclusion
-from .serializers import DefectSerializer, ReleaseConclusionSerializer
+from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.shortcuts import get_object_or_404
+from .models import Defect, DefectAttachment, ReleaseConclusion
+from .serializers import DefectSerializer, DefectAttachmentSerializer, ReleaseConclusionSerializer
 from .services import compute_requirement_coverage, evaluate_quality_gate
 
 
@@ -27,6 +30,50 @@ class DefectViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(reported_by=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='attachments', parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def upload_attachment(self, request, pk=None):
+        """上传缺陷附件（截图/日志）。multipart/form-data 字段名=file。"""
+        defect = self.get_object()
+        f = request.FILES.get('file')
+        if not f:
+            return Response({'detail': '缺少 file 字段'}, status=400)
+        kind = request.data.get('kind', 'screenshot')
+        caption = request.data.get('caption', '')
+        att = DefectAttachment.objects.create(
+            defect=defect,
+            file=f,
+            original_name=f.name,
+            size_bytes=f.size,
+            mime_type=f.content_type or '',
+            kind=kind if kind in dict(DefectAttachment.KIND_CHOICES) else 'screenshot',
+            caption=caption,
+            uploaded_by=request.user,
+        )
+        return Response(DefectAttachmentSerializer(att, context={'request': request}).data, status=201)
+
+    @action(detail=True, methods=['delete'], url_path='attachments/(?P<att_id>\\d+)')
+    def delete_attachment(self, request, pk=None, att_id=None):
+        """删除缺陷附件。"""
+        defect = self.get_object()
+        att = get_object_or_404(DefectAttachment, pk=att_id, defect=defect)
+        att.file.delete(save=False)
+        att.delete()
+        return Response(status=204)
+
+
+class DefectAttachmentViewSet(viewsets.ReadOnlyModelViewSet):
+    """缺陷附件查询（按 defect_id 过滤）。"""
+    queryset = DefectAttachment.objects.all()
+    serializer_class = DefectAttachmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = DefectAttachment.objects.all()
+        defect_id = self.request.query_params.get('defect')
+        if defect_id:
+            qs = qs.filter(defect_id=defect_id)
+        return qs
 
 
 class ReleaseConclusionViewSet(viewsets.ModelViewSet):

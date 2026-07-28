@@ -64,6 +64,14 @@ class Defect(models.Model):
         related_name='assigned_defects', verbose_name='指派人'
     )
     steps_to_reproduce = models.TextField(blank=True, verbose_name='复现步骤')
+    environment = models.CharField(
+        max_length=200, blank=True, default='', verbose_name='环境信息'
+    )
+    source = models.CharField(
+        max_length=50, blank=True, default='manual',
+        verbose_name='缺陷来源',
+        help_text='manual=手动创建 / execution=用例执行 / performance=性能测试 / hermes=数字人 / ai=AI分析'
+    )
     created_at = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -75,6 +83,42 @@ class Defect(models.Model):
 
     def __str__(self):
         return f"[{self.get_severity_display()}] {self.title}"
+
+
+class DefectAttachment(models.Model):
+    """缺陷附件（截图/日志/录像等）。"""
+    KIND_CHOICES = [
+        ('screenshot', '截图'),
+        ('log', '日志'),
+        ('video', '录像'),
+        ('other', '其他'),
+    ]
+
+    defect = models.ForeignKey(
+        Defect, on_delete=models.CASCADE, related_name='attachments', verbose_name='所属缺陷'
+    )
+    kind = models.CharField(
+        max_length=20, choices=KIND_CHOICES, default='screenshot', verbose_name='附件类型'
+    )
+    file = models.FileField(upload_to='defects/%Y/%m/', verbose_name='文件')
+    original_name = models.CharField(max_length=255, blank=True, verbose_name='原始文件名')
+    size_bytes = models.PositiveIntegerField(default=0, verbose_name='文件大小(字节)')
+    mime_type = models.CharField(max_length=100, blank=True, verbose_name='MIME 类型')
+    caption = models.CharField(max_length=300, blank=True, verbose_name='说明')
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='uploaded_defect_attachments', verbose_name='上传者'
+    )
+    uploaded_at = models.DateTimeField(default=timezone.now, verbose_name='上传时间')
+
+    class Meta:
+        db_table = 'defect_attachments'
+        verbose_name = '缺陷附件'
+        verbose_name_plural = '缺陷附件'
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.defect_id}-{self.original_name or self.file.name}"
 
 
 class ReleaseConclusion(models.Model):

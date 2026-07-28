@@ -121,6 +121,15 @@
           <h3>AI 评测</h3>
           <p>提示词版本、成本观测、效果看板与反馈</p>
         </div>
+
+        <!-- 问题管理 -->
+        <div class="nav-card" @click="handleNavigate('defects')" role="button" tabindex="0">
+          <div class="card-icon defects-icon">
+            <el-icon><Warning /></el-icon>
+          </div>
+          <h3>问题管理</h3>
+          <p>BUG 全生命周期管理：截图、严重度、状态流转</p>
+        </div>
       </div>
     </div>
   </div>
@@ -166,7 +175,8 @@ const handleNavigate = (type) => {
     'config': '/configuration/ai-model',
     'perf': '/performance-testing/scripts',
     'ops-tools': '/ops-tools/text2sql',
-    'ai-eval': '/ai-eval/dashboard'
+    'ai-eval': '/ai-eval/dashboard',
+    'defects': '/defects'
   }
 
   if (routes[type]) {
@@ -354,6 +364,11 @@ const handleNavigate = (type) => {
   &.ai-eval-icon {
     background: #f9f0ff;
     color: #722ed1;
+  }
+
+  &.defects-icon {
+    background: #fef0f0;
+    color: #f56c6c;
   }
 }
 

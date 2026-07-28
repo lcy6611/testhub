@@ -294,6 +294,67 @@
             <label>优先级:</label>
             <span class="priority-tag" :class="selectedCase.priority?.toLowerCase()">{{ selectedCase.priority || '中' }}</span>
           </div>
+
+          <!-- 深入分析 (Hoteam-AI) -->
+          <div class="ai-deep-analysis">
+            <div class="ai-header">
+              <span class="ai-title">
+                <el-icon><MagicStick /></el-icon>
+                深入分析 (Hoteam-AI)
+              </span>
+              <el-button
+                v-if="!aiAnalysisResult"
+                type="primary"
+                size="small"
+                :loading="aiAnalyzing"
+                @click="runAiAnalysis"
+                :disabled="!selectedCase"
+              >
+                {{ aiAnalyzing ? '分析中…' : '开始分析' }}
+              </el-button>
+              <el-button v-else size="small" plain @click="aiAnalysisResult = null">清空结果</el-button>
+            </div>
+            <div v-if="!aiAnalysisResult && !aiAnalyzing" class="ai-hint">
+              基于该用例的标题/前置/步骤/预期，AI 会建议补充步骤（边界/异常/性能/安全等）与风险点。
+            </div>
+            <div v-else-if="aiAnalyzing" class="ai-loading">
+              <el-icon class="rotating"><Loading /></el-icon> 正在调用 AI，请稍候…
+            </div>
+            <div v-else class="ai-result">
+              <div v-if="aiAnalysisResult.summary" class="ai-summary">
+                <strong>总结：</strong>{{ aiAnalysisResult.summary }}
+              </div>
+              <div v-if="aiAnalysisResult.suggestions && aiAnalysisResult.suggestions.length" class="ai-section">
+                <h4>建议补充步骤（{{ aiAnalysisResult.suggestions.length }}）</h4>
+                <el-table :data="aiAnalysisResult.suggestions" size="small" border :show-overflow-tooltip="true">
+                  <el-table-column prop="category" label="类型" width="80" />
+                  <el-table-column prop="action" label="操作" min-width="240" />
+                  <el-table-column prop="expected" label="预期" min-width="180" />
+                  <el-table-column label="操作" width="70" align="center">
+                    <template #default="{ row }">
+                      <el-button size="small" link type="primary" @click="appendSuggestionToSteps(row)">采纳</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+              <div v-if="aiAnalysisResult.risks && aiAnalysisResult.risks.length" class="ai-section">
+                <h4>风险点（{{ aiAnalysisResult.risks.length }}）</h4>
+                <ul class="risk-list">
+                  <li v-for="(r, i) in aiAnalysisResult.risks" :key="i" :class="`risk-${r.level}`">
+                    <el-tag size="small" :type="r.level === 'high' ? 'danger' : r.level === 'medium' ? 'warning' : 'info'">
+                      {{ r.level }}
+                    </el-tag>
+                    <strong>{{ r.title }}</strong>
+                    <span v-if="r.mitigation" class="mitigation"> — {{ r.mitigation }}</span>
+                  </li>
+                </ul>
+              </div>
+              <div v-if="aiAnalysisResult.tokens_used" class="ai-meta">
+                消耗 {{ aiAnalysisResult.tokens_used }} tokens · 耗时 {{ aiAnalysisResult.elapsed_ms }}ms
+                <span v-if="aiAnalysisResult.ai_model"> · {{ aiAnalysisResult.ai_model }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -302,7 +363,7 @@
 
 <script>
 import api from '@/utils/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { normalizeExportCell } from '@/utils/testcaseExport'
 import { formatGraphExpansionHint } from '@/utils/kgLabels'
@@ -321,6 +382,8 @@ export default {
       isPolling: false,
       pollInterval: null,
       showCaseDetail: false,
+      aiAnalyzing: false,
+      aiAnalysisResult: null,
       selectedCase: {},
       selectedCaseIndex: 0,
       currentPage: 1,
@@ -821,6 +884,55 @@ export default {
     closeCaseDetail() {
       this.showCaseDetail = false
       this.selectedCase = {}
+      this.aiAnalysisResult = null
+    },
+
+    async runAiAnalysis() {
+      if (!this.selectedCase) {
+        ElMessage.warning('请先选择用例')
+        return
+      }
+      // 把纯文本 steps 拆成 action/expected 结构（按行/句号切分）
+      const stepText = (this.selectedCase.steps || '').toString().trim()
+      const lines = stepText.split(/\n+|(?<=\d[.、])\s*/g).map(s => s.trim()).filter(Boolean)
+      const steps = lines.length > 0
+        ? lines.map(line => {
+            // 尝试「操作：xxx 预期：yyy」格式
+            const m = line.match(/(.+?)(?:预期[：:]\s*(.+))$/s)
+            if (m) return { action: m[1].trim(), expected: m[2].trim() }
+            return { action: line, expected: this.selectedCase.expected || '' }
+          })
+        : [{ action: this.selectedCase.scenario || '执行用例', expected: this.selectedCase.expected || '' }]
+
+      this.aiAnalyzing = true
+      try {
+        const res = await api.post('/testcases/analyze/', {
+          title: this.selectedCase.scenario || this.selectedCase.title,
+          description: this.selectedCase.scenario || '',
+          preconditions: this.selectedCase.precondition || '',
+          steps: steps,
+        })
+        const data = res.data || res
+        if (data.error) {
+          ElMessage.warning(data.summary || 'AI 分析失败')
+        }
+        this.aiAnalysisResult = data
+        if (!data.error) {
+          ElMessage.success(`分析完成，建议 ${data.suggestions?.length || 0} 条、风险 ${data.risks?.length || 0} 条`)
+        }
+      } catch (e) {
+        ElMessage.error('调用 AI 失败：' + (e.response?.data?.detail || e.message))
+      } finally {
+        this.aiAnalyzing = false
+      }
+    },
+
+    appendSuggestionToSteps(row) {
+      if (!this.selectedCase) return
+      const addition = `[${row.category}] ${row.action} | 预期：${row.expected}`
+      const current = this.selectedCase.steps || ''
+      this.selectedCase.steps = current ? current + '\n' + addition : addition
+      ElMessage.success('已添加到操作步骤（请记得保存）')
     },
 
     async adoptSingleCase(testCase, index) {
@@ -1599,5 +1711,89 @@ export default {
 .kb-collapse-leave-to {
   max-height: 0;
   opacity: 0;
+}
+
+/* 深入分析 (Hoteam-AI) */
+.ai-deep-analysis {
+  margin-top: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+}
+.ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.ai-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5b8ff9;
+}
+.ai-hint {
+  color: #909399;
+  font-size: 12px;
+  padding: 6px 0;
+}
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #409eff;
+  font-size: 13px;
+  padding: 8px 0;
+}
+.rotating {
+  animation: rotating 1.4s linear infinite;
+}
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ai-result .ai-summary {
+  font-size: 13px;
+  color: #303133;
+  padding: 8px 10px;
+  background: #fff;
+  border-left: 3px solid #5b8ff9;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+.ai-result .ai-section {
+  margin-top: 10px;
+}
+.ai-result .ai-section h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #303133;
+}
+.risk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.risk-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: #303133;
+  border-bottom: 1px dashed #ebeef5;
+}
+.risk-list li:last-child { border-bottom: none; }
+.risk-list .mitigation {
+  color: #909399;
+}
+.ai-meta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #c0c4cc;
+  text-align: right;
 }
 </style>

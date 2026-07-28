@@ -64,7 +64,7 @@ def agent_chat(request):
         thought_parts = []
         tool_calls = []
         try:
-            for event in run_agent(config, message, history):
+            for event in run_agent(config, message, history, current_user=user):
                 etype = event.get("type")
                 # 收集最终内容，用于流式结束后持久化
                 if etype == "message":

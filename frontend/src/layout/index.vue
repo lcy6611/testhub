@@ -69,6 +69,10 @@
               <el-icon><DataAnalysis /></el-icon>
               <span>测试报告</span>
             </el-menu-item>
+            <el-menu-item index="/defects">
+              <el-icon><Warning /></el-icon>
+              <span>问题管理</span>
+            </el-menu-item>
           </template>
 
           <!-- 接口测试模块菜单 -->

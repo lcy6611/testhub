@@ -117,9 +117,45 @@ class TestRunCaseHistory(models.Model):
     comments = models.TextField(blank=True, verbose_name='备注')
     executed_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='执行者')
     executed_at = models.DateTimeField(default=timezone.now, verbose_name='执行时间')
-    
+
     class Meta:
         db_table = 'test_run_case_history'
         verbose_name = '测试执行历史'
         verbose_name_plural = '测试执行历史'
         ordering = ['-executed_at']
+
+
+class TestRunCaseStep(models.Model):
+    """测试执行用例步骤（步骤级执行状态）。
+
+    与 TestCaseStep 一一对应（按 step_number 关联），但有独立的执行态。
+    用例状态联动规则：
+        - 任何步骤 failed/blocked  → 用例 failed（除非已被手工覆盖）
+        - 全部步骤 passed          → 用例 passed
+        - 其它情况（混合/未测）     → 用例保持 untested
+    """
+    run_case = models.ForeignKey(
+        TestRunCase, on_delete=models.CASCADE, related_name='step_records', verbose_name='执行用例'
+    )
+    step_number = models.PositiveIntegerField(verbose_name='步骤序号')
+    action = models.TextField(verbose_name='操作')
+    expected = models.TextField(verbose_name='预期结果')
+    actual_result = models.TextField(blank=True, verbose_name='实际结果')
+    status = models.CharField(
+        max_length=20, choices=TestRunCase.STATUS_CHOICES,
+        default='untested', verbose_name='执行状态'
+    )
+    comments = models.TextField(blank=True, verbose_name='备注')
+    executed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='执行者'
+    )
+    executed_at = models.DateTimeField(null=True, blank=True, verbose_name='执行时间')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'test_run_case_steps'
+        unique_together = ['run_case', 'step_number']
+        ordering = ['step_number']
+        verbose_name = '执行用例步骤'
+        verbose_name_plural = '执行用例步骤'

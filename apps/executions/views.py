@@ -2,12 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
-from .models import TestPlan, TestRun, TestRunCase, TestRunCaseHistory
+from .models import TestPlan, TestRun, TestRunCase, TestRunCaseHistory, TestRunCaseStep
+from .services import init_steps_for_run_case, update_step_status, recompute_run_case_status
+from .serializers import (TestPlanSerializer, TestRunSerializer, TestRunCaseSerializer,
+                         TestPlanDetailSerializer, TestRunCaseDetailSerializer,
+                         TestRunCaseHistorySerializer, TestRunCaseStepSerializer)
 from apps.testcases.models import TestCase
 from apps.projects.models import Project
-from .serializers import (TestPlanSerializer, TestRunSerializer, TestRunCaseSerializer, 
-                         TestPlanDetailSerializer, TestRunCaseDetailSerializer, 
-                         TestRunCaseHistorySerializer)
 
 class TestPlanViewSet(viewsets.ModelViewSet):
     """
@@ -198,6 +199,52 @@ class TestRunCaseViewSet(viewsets.ModelViewSet):
         """
         获取用例执行历史记录
         """
+
+    @action(detail=True, methods=['post'], url_path='init-steps')
+    def init_steps(self, request, pk=None):
+        """从 TestCase 复制步骤生成 TestRunCaseStep（已存在则跳过）。"""
+        run_case = self.get_object()
+        created = init_steps_for_run_case(run_case)
+        return Response({
+            'created': created,
+            'total': run_case.step_records.count(),
+            'steps': TestRunCaseStepSerializer(run_case.step_records.all(), many=True).data
+        })
+
+    @action(detail=True, methods=['get'], url_path='steps')
+    def list_steps(self, request, pk=None):
+        """获取用例的所有执行步骤（按 step_number 升序）。"""
+        run_case = self.get_object()
+        return Response(TestRunCaseStepSerializer(run_case.step_records.all(), many=True).data)
+
+    @action(detail=True, methods=['patch'], url_path='steps/(?P<step_number>\\d+)')
+    def update_step(self, request, pk=None, step_number=None):
+        """更新单条步骤状态；自动联动用例状态。
+        body: { status: passed|failed|blocked|untested|retest, actual_result?, comments? }
+        """
+        run_case = self.get_object()
+        new_status = request.data.get('status')
+        if new_status not in dict(TestRunCase.STATUS_CHOICES):
+            return Response({'detail': 'status 必填且合法'}, status=400)
+        step = update_step_status(
+            run_case,
+            int(step_number),
+            status_value=new_status,
+            actual_result=request.data.get('actual_result', ''),
+            comments=request.data.get('comments', ''),
+            user=request.user,
+        )
+        return Response({
+            'step': TestRunCaseStepSerializer(step).data,
+            'run_case_status': run_case.status,
+        })
+
+    @action(detail=True, methods=['post'], url_path='recompute-status')
+    def recompute_status(self, request, pk=None):
+        """强制重算用例状态（按步骤联动）。"""
+        run_case = self.get_object()
+        recompute_run_case_status(run_case, force=True)
+        return Response(TestRunCaseDetailSerializer(run_case).data)
         run_case = self.get_object()
         history = run_case.history.all().order_by('-executed_at')
         serializer = TestRunCaseHistorySerializer(history, many=True)

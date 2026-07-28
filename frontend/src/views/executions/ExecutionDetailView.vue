@@ -98,25 +98,108 @@
           </el-button>
         </div>
         
-        <!-- 优化的用例表格 -->
-        <el-table 
+        <!-- 优化的用例表格（支持步骤折叠） -->
+        <el-table
           ref="tableRef"
-          :data="paginatedCases(run.run_cases)" 
-          style="width: 100%" 
+          :data="paginatedCases(run.run_cases)"
+          style="width: 100%"
           class="execution-table"
           @selection-change="handleSelectionChange"
-          :row-key="(row) => row.id">
+          @expand-change="(row, expandedRows) => handleExpandChange(row, expandedRows, run.id)"
+          :row-key="(row) => row.id"
+          :expand-row-keys="run.expandedRowKeys || []">
+          <el-table-column type="expand">
+            <template #default="{ row: caseRow }">
+              <div class="case-steps-panel">
+                <div class="case-steps-header">
+                  <span class="case-steps-title">
+                    <el-icon><List /></el-icon>
+                    步骤执行（联动至用例状态）
+                  </span>
+                  <el-button
+                    v-if="!caseRow._stepsLoaded"
+                    size="small"
+                    type="primary"
+                    plain
+                    @click="initCaseSteps(caseRow, run.id)"
+                  >
+                    初始化步骤
+                  </el-button>
+                </div>
+                <el-table
+                  v-if="caseRow._stepsLoaded"
+                  :data="caseRow.step_records || []"
+                  size="small"
+                  :show-overflow-tooltip="true"
+                  class="steps-table"
+                >
+                  <el-table-column prop="step_number" label="#" width="55" />
+                  <el-table-column label="操作" min-width="280">
+                    <template #default="{ row: step }">
+                      <span class="step-action">{{ step.action }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="预期" min-width="200" show-overflow-tooltip>
+                    <template #default="{ row: step }">
+                      <span class="step-expected">{{ step.expected }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="实际结果" min-width="180">
+                    <template #default="{ row: step }">
+                      <el-input
+                        v-model="step.actual_result"
+                        size="small"
+                        placeholder="实际结果"
+                        @blur="updateStep(caseRow, step, run.id)"
+                      />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="步骤状态" width="160">
+                    <template #default="{ row: step }">
+                      <el-select
+                        v-model="step.status"
+                        size="small"
+                        @change="updateStep(caseRow, step, run.id)"
+                        style="width: 100%"
+                      >
+                        <el-option label="未测试" value="untested" />
+                        <el-option label="通过" value="passed" />
+                        <el-option label="失败" value="failed" />
+                        <el-option label="阻塞" value="blocked" />
+                        <el-option label="重测" value="retest" />
+                      </el-select>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <div v-else class="case-steps-empty">
+                  <el-empty v-if="!caseRow._stepsLoading" description="点击右上角「初始化步骤」从 TestCase 同步" :image-size="60" />
+                  <div v-else class="loading-text">同步中...</div>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column type="selection" width="55" :reserve-selection="true" />
-          <el-table-column 
-            type="index" 
-            label="序号" 
-            width="80" 
+          <el-table-column
+            type="index"
+            label="序号"
+            width="70"
             :index="getSerialNumber" />
-          <el-table-column prop="testcase" label="测试用例" min-width="250" />
+          <el-table-column label="测试用例" min-width="280">
+            <template #default="scope">
+              <div class="case-title-cell">
+                <el-link type="primary" :underline="false" @click="scope.row._expanded = !scope.row._expanded; handleExpandChange(scope.row, [], null)">
+                  {{ scope.row.testcase }}
+                </el-link>
+                <el-tag v-if="scope.row.step_records && scope.row.step_records.length" size="small" type="info">
+                  {{ scope.row.step_records.length }} 步
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="执行状态" width="150">
             <template #default="scope">
-              <el-select 
-                v-model="scope.row.status" 
+              <el-select
+                v-model="scope.row.status"
                 @change="updateCaseStatus(scope.row)"
                 size="small">
                 <el-option label="未测试" value="untested" />
@@ -129,8 +212,8 @@
           </el-table-column>
           <el-table-column label="备注" min-width="250">
             <template #default="scope">
-              <el-input 
-                v-model="scope.row.comments" 
+              <el-input
+                v-model="scope.row.comments"
                 placeholder="请输入备注"
                 type="textarea"
                 :rows="2"
@@ -141,9 +224,9 @@
           </el-table-column>
           <el-table-column label="操作" width="120" fixed="right">
             <template #default="scope">
-              <el-button 
-                size="small" 
-                type="primary" 
+              <el-button
+                size="small"
+                type="primary"
                 :icon="Clock"
                 @click="viewCaseHistory(scope.row)">
                 历史
@@ -196,9 +279,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Delete, Clock, Document, CircleCheck, CircleClose, 
-  WarningFilled, QuestionFilled, Stamp, FolderOpened 
+import {
+  Delete, Clock, Document, CircleCheck, CircleClose,
+  WarningFilled, QuestionFilled, Stamp, FolderOpened, List
 } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 
@@ -219,6 +302,56 @@ const fetchTestPlan = async () => {
     testPlan.value = response.data
   } catch (error) {
     ElMessage.error('获取测试计划失败')
+  }
+}
+
+// 加载某 run_case 的步骤
+const loadCaseSteps = async (runCase) => {
+  try {
+    const res = await api.get(`/executions/run_cases/${runCase.id}/steps/`)
+    runCase.step_records = res.data || []
+    runCase._stepsLoaded = true
+  } catch (e) {
+    ElMessage.error('加载步骤失败：' + (e.message || ''))
+    runCase._stepsLoaded = true
+  }
+}
+
+// 初始化某 run_case 的步骤（从 TestCase 复制）
+const initCaseSteps = async (runCase, runId) => {
+  runCase._stepsLoading = true
+  try {
+    await api.post(`/executions/run_cases/${runCase.id}/init-steps/`)
+    await loadCaseSteps(runCase)
+    ElMessage.success('步骤已初始化')
+  } catch (e) {
+    ElMessage.error('初始化失败：' + (e.message || ''))
+  } finally {
+    runCase._stepsLoading = false
+  }
+}
+
+// 展开/收起某 case 时按需加载
+const handleExpandChange = async (row, _expandedRows, _runId) => {
+  if (row._expanded && !row._stepsLoaded) {
+    await loadCaseSteps(row)
+  }
+}
+
+// 更新某步骤状态（自动联动 case 状态）
+const updateStep = async (runCase, step, _runId) => {
+  try {
+    const res = await api.patch(`/executions/run_cases/${runCase.id}/steps/${step.step_number}/`, {
+      status: step.status,
+      actual_result: step.actual_result || ''
+    })
+    const payload = res.data || {}
+    if (payload.run_case_status) {
+      runCase.status = payload.run_case_status
+    }
+    // 静默成功，不打扰
+  } catch (e) {
+    ElMessage.error('步骤状态更新失败：' + (e.message || ''))
   }
 }
 
@@ -594,5 +727,55 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+/* 步骤折叠区 */
+.case-steps-panel {
+  padding: 12px 16px;
+  background: #fafbfc;
+  border-radius: 6px;
+  margin: 4px 0;
+}
+.case-steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.case-steps-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #409eff;
+}
+.steps-table {
+  border-radius: 4px;
+  overflow: hidden;
+}
+.step-action {
+  color: #303133;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.step-expected {
+  color: #67c23a;
+  font-size: 12px;
+}
+.case-steps-empty {
+  text-align: center;
+  padding: 12px 0;
+}
+.loading-text {
+  color: #909399;
+  font-size: 12px;
+  padding: 8px;
+}
+.case-title-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

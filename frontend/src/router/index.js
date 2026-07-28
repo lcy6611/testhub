@@ -354,6 +354,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/defects',
+    name: 'DefectList',
+    component: () => import('@/views/defects/DefectListView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/ai-intelligent-mode',
     component: Layout,
     meta: { requiresAuth: true },

@@ -77,15 +77,15 @@
         <div class="toolbar">
           <el-button type="primary" @click="openPromptDialog" :icon="Plus">新建版本</el-button>
         </div>
-        <el-table :data="promptList" v-loading="promptLoading" size="small" border>
+        <el-table :data="promptList" v-loading="promptLoading" size="small" border :show-overflow-tooltip="true">
           <el-table-column prop="key" label="标识" width="140" />
           <el-table-column prop="name" label="名称" />
           <el-table-column prop="category" label="类别" width="100" />
           <el-table-column prop="version" label="版本" width="80" />
           <el-table-column label="启用" width="80">
             <template #default="{ row }">
-              <el-tag v-if="row.is_active" type="success">是</el-tag>
-              <el-tag v-else type="info">否</el-tag>
+              <el-tag v-if="row.is_active" type="success" size="small">是</el-tag>
+              <el-tag v-else type="info" size="small">否</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="created_at" label="创建时间" width="170" />
@@ -264,11 +264,11 @@
 
       <!-- 反馈记录 -->
       <el-tab-pane label="反馈记录" name="feedbacks">
-        <el-table :data="feedbackList" v-loading="feedbackLoading" size="small" border>
+        <el-table :data="feedbackList" v-loading="feedbackLoading" size="small" border :show-overflow-tooltip="true">
           <el-table-column prop="module" label="来源模块" width="160" />
           <el-table-column label="评价" width="90">
             <template #default="{ row }">
-              <el-tag :type="row.rating === 'positive' ? 'success' : row.rating === 'negative' ? 'danger' : 'info'">
+              <el-tag :type="row.rating === 'positive' ? 'success' : row.rating === 'negative' ? 'danger' : 'info'" size="small">
                 {{ row.rating === 'positive' ? '赞' : row.rating === 'negative' ? '踩' : '中性' }}
               </el-tag>
             </template>

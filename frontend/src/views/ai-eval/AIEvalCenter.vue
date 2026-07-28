@@ -311,6 +311,13 @@ const projectId = ref(null)
 const days = ref(30)
 const projects = ref([])
 
+// 后端分页响应统一转数组，兼容 [{...}] / {results: [...]} / 其他
+function normalize(list) {
+  if (Array.isArray(list)) return list
+  if (list && Array.isArray(list.results)) return list.results
+  return []
+}
+
 // 看板
 const stats = reactive({ totals: { calls: 0, total_tokens: 0, cost: 0, avg_latency_ms: 0, success_rate: 0 }, by_module: [], by_day: [], latest_eval: {} })
 const statsLoading = ref(false)
@@ -350,7 +357,7 @@ async function loadPrompts() {
   promptLoading.value = true
   try {
     const res = await getPromptVersions()
-    promptList.value = res.data || res
+    promptList.value = normalize(res.data || res)
   } finally { promptLoading.value = false }
 }
 function openPromptDialog() {
@@ -388,7 +395,7 @@ async function loadDatasets() {
   datasetLoading.value = true
   try {
     const res = await getDatasets()
-    datasetList.value = res.data || res
+    datasetList.value = normalize(res.data || res)
   } finally { datasetLoading.value = false }
 }
 function openDatasetDialog() {
@@ -410,7 +417,7 @@ async function loadCases(datasetId) {
   caseLoading.value = true
   try {
     const res = await getCases({ dataset_id: datasetId })
-    caseList.value = res.data || res
+    caseList.value = normalize(res.data || res)
   } finally { caseLoading.value = false }
 }
 function openCaseDialog() {
@@ -449,14 +456,14 @@ let pollTimer = null
 async function loadModelConfigs() {
   try {
     const res = await request.get('/requirement-analysis/ai-models/')
-    modelConfigs.value = res.data || res
+    modelConfigs.value = normalize(res.data || res)
   } catch (e) { /* ignore */ }
 }
 async function loadRuns() {
   runLoading.value = true
   try {
     const res = await getRuns()
-    runList.value = res.data || res
+    runList.value = normalize(res.data || res)
   } finally { runLoading.value = false }
 }
 function openRunDialog() {
@@ -490,12 +497,12 @@ async function openResults(run) {
 async function fetchResults(run) {
   try {
     const res = await getRunResults(run.id)
-    resultList.value = res.data || res
+    resultList.value = normalize(res.data || res)
     // 同步最新运行状态
     const updated = runList.value.find(r => r.id === run.id)
     if (updated) {
-      const detail = (await getRuns()).data || (await getRuns())
-      const fresh = (detail.data || detail).find(r => r.id === run.id)
+      const detail = await getRuns()
+      const fresh = normalize(detail.data || detail).find(r => r.id === run.id)
       if (fresh) { currentRun.value = fresh; Object.assign(run, fresh) }
     }
   } finally { resultLoading.value = false }
@@ -504,7 +511,7 @@ function startPoll(run) {
   stopPoll()
   pollTimer = setInterval(async () => {
     const res = await getRuns()
-    const list = res.data || res
+    const list = normalize(res.data || res)
     const fresh = list.find(r => r.id === run.id)
     if (fresh) {
       Object.assign(run, fresh)
@@ -534,7 +541,7 @@ async function loadFeedbacks() {
   feedbackLoading.value = true
   try {
     const res = await getFeedbacks()
-    feedbackList.value = res.data || res
+    feedbackList.value = normalize(res.data || res)
   } finally { feedbackLoading.value = false }
 }
 function openConvert(row) {
@@ -555,7 +562,7 @@ function onFilterChange() { loadStats() }
 onMounted(async () => {
   try {
     const res = await getProjects()
-    projects.value = res.data || res
+    projects.value = normalize(res.data || res)
   } catch (e) { /* ignore */ }
   loadStats()
   loadPrompts()

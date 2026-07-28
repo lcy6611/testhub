@@ -728,23 +728,6 @@ const routes = [
       }
     ]
   },
-  // 缺陷与发布门禁路由
-  {
-    path: '/defects',
-    component: Layout,
-    meta: { requiresAuth: true },
-    children: [
-      {
-        path: '',
-        redirect: 'quality-gate'
-      },
-      {
-        path: 'quality-gate',
-        name: 'QualityGate',
-        component: () => import('@/views/defects/QualityGateView.vue')
-      }
-    ]
-  },
   // AI 评测与反馈闭环
   {
     path: '/ai-eval',

@@ -391,14 +391,6 @@
             </el-menu-item>
           </template>
 
-          <!-- 缺陷与发布门禁模块菜单 -->
-          <template v-else-if="currentModule === 'defects'">
-            <el-menu-item index="/defects/quality-gate">
-              <el-icon><Warning /></el-icon>
-              <span>发布门禁</span>
-            </el-menu-item>
-          </template>
-
           <!-- AI 评测与反馈闭环模块菜单 -->
           <template v-else-if="currentModule === 'ai-eval'">
             <el-menu-item index="/ai-eval/dashboard">
@@ -556,7 +548,6 @@ const currentModule = computed(() => {
   if (route.path.startsWith('/configuration')) return 'configuration'
   if (route.path.startsWith('/performance-testing')) return 'performance-testing'
   if (route.path.startsWith('/ops-tools')) return 'ops-tools'
-  if (route.path.startsWith('/defects')) return 'defects'
   if (route.path.startsWith('/ai-eval')) return 'ai-eval'
   return ''
 })
@@ -572,7 +563,6 @@ const moduleName = computed(() => {
     'configuration': '配置中心',
     'performance-testing': '性能测试',
     'ops-tools': '运维工具',
-    'defects': '质量门禁',
     'ai-eval': 'AI 评测'
   }
   return map[currentModule.value] || ''
@@ -693,7 +683,6 @@ const breadcrumbTitle = computed(() => {
     '/ops-tools/text2sql': 'Text2SQL',
     '/ops-tools/files': '内网文件传输',
 
-    '/defects/quality-gate': '发布门禁',
     '/ai-eval/dashboard': 'AI 评测中心',
 
     '/profile': '个人设置'

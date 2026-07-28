@@ -113,15 +113,6 @@
           <p>Text2SQL、日志查询、数据库连接、文件传输</p>
         </div>
 
-        <!-- 质量门禁（需求→缺陷闭环 #260） -->
-        <div class="nav-card" @click="handleNavigate('defects')" role="button" tabindex="0">
-          <div class="card-icon defects-icon">
-            <el-icon><Warning /></el-icon>
-          </div>
-          <h3>质量门禁</h3>
-          <p>需求到缺陷闭环、覆盖率与发布门禁</p>
-        </div>
-
         <!-- AI 评测（#261） -->
         <div class="nav-card" @click="handleNavigate('ai-eval')" role="button" tabindex="0">
           <div class="card-icon ai-eval-icon">
@@ -175,7 +166,6 @@ const handleNavigate = (type) => {
     'config': '/configuration/ai-model',
     'perf': '/performance-testing/scripts',
     'ops-tools': '/ops-tools/text2sql',
-    'defects': '/defects/quality-gate',
     'ai-eval': '/ai-eval/dashboard'
   }
 
@@ -360,10 +350,6 @@ const handleNavigate = (type) => {
     color: #1890ff;
   }
 
-  &.defects-icon {
-    background: #fff1f0;
-    color: #f5222d;
-  }
 
   &.ai-eval-icon {
     background: #f9f0ff;

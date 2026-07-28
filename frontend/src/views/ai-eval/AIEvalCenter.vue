@@ -25,11 +25,11 @@
         </div>
 
         <div class="stat-cards" v-loading="statsLoading">
-          <el-card shadow="hover"><template #header>总调用次数</template><el-statistic :value="stats.totals.calls || 0" /></el-card>
-          <el-card shadow="hover"><template #header>总 Tokens</template><el-statistic :value="stats.totals.total_tokens || 0" /></el-card>
-          <el-card shadow="hover"><template #header>估算成本(元)</template><el-statistic :value="stats.totals.cost || 0" :precision="4" /></el-card>
-          <el-card shadow="hover"><template #header>平均耗时(ms)</template><el-statistic :value="stats.totals.avg_latency_ms || 0" /></el-card>
-          <el-card shadow="hover"><template #header>成功率</template><el-statistic :value="(stats.totals.success_rate || 0) * 100" :precision="1" suffix="%" /></el-card>
+          <el-card shadow="never" header="总调用次数"><div class="stat-n">{{ stats.totals.calls || 0 }}</div></el-card>
+          <el-card shadow="never" header="总 Tokens"><div class="stat-n">{{ stats.totals.total_tokens || 0 }}</div></el-card>
+          <el-card shadow="never" header="估算成本(元)"><div class="stat-n">{{ Number(stats.totals.cost || 0).toFixed(4) }}</div></el-card>
+          <el-card shadow="never" header="平均耗时(ms)"><div class="stat-n">{{ stats.totals.avg_latency_ms || 0 }}</div></el-card>
+          <el-card shadow="never" header="成功率"><div class="stat-n">{{ Number(stats.totals.success_rate || 0).toFixed(1) }}%</div></el-card>
         </div>
 
         <el-row :gutter="16" style="margin-top: 16px">
@@ -322,10 +322,17 @@ async function loadStats() {
     const res = await getEvalStats(params)
     const data = res?.data || res
     if (data && typeof data === 'object') {
-      stats.totals = data.totals || { calls: 0, total_tokens: 0, cost: 0, avg_latency_ms: 0, success_rate: 0 }
-      stats.by_module = data.by_module || []
-      stats.by_day = data.by_day || []
-      stats.latest_eval = data.latest_eval || {}
+      const t = data.totals || {}
+      stats.totals = {
+        calls: Number(t.calls || 0),
+        total_tokens: Number(t.total_tokens || 0),
+        cost: Number(t.cost || 0),
+        avg_latency_ms: Number(t.avg_latency_ms || 0),
+        success_rate: Number(t.success_rate || 0),
+      }
+      stats.by_module = Array.isArray(data.by_module) ? data.by_module : []
+      stats.by_day = Array.isArray(data.by_day) ? data.by_day : []
+      stats.latest_eval = (data.latest_eval && typeof data.latest_eval === 'object') ? data.latest_eval : {}
     }
   } catch (e) {
     ElMessage.error('加载看板失败')
@@ -565,6 +572,8 @@ onBeforeUnmount(() => stopPoll())
 .header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .header-bar .title { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
 .stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.stat-cards .stat-n { font-size: 22px; font-weight: 700; color: #303133; line-height: 1.4; }
+.stat-cards .el-card__header { font-size: 13px; color: #909399; font-weight: 500; }
 .dash-toolbar, .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .ds-name { font-weight: 600; margin-right: 12px; }
 </style>

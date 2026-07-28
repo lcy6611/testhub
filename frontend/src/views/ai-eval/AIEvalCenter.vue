@@ -183,25 +183,25 @@
           <el-button type="primary" @click="openRunDialog" :icon="VideoPlay">发起评测</el-button>
           <el-button @click="loadRuns" :icon="Refresh">刷新</el-button>
         </div>
-        <el-table :data="runList" v-loading="runLoading" size="small" border>
-          <el-table-column prop="dataset_name" label="数据集" width="160" />
-          <el-table-column prop="model_config_name" label="模型" width="140" />
-          <el-table-column prop="prompt_version_label" label="提示词版本" width="130" />
-          <el-table-column label="状态" width="100">
+        <el-table :data="runList" v-loading="runLoading" size="small" border :show-overflow-tooltip="true">
+          <el-table-column prop="dataset_name" label="数据集" width="180" show-overflow-tooltip />
+          <el-table-column prop="model_config_name" label="模型" width="180" show-overflow-tooltip />
+          <el-table-column prop="prompt_version_label" label="提示词版本" width="140" show-overflow-tooltip />
+          <el-table-column label="状态" width="90">
             <template #default="{ row }">
-              <el-tag :type="runTagType(row.status)">{{ runStatusText(row.status) }}</el-tag>
+              <el-tag :type="runTagType(row.status)" size="small">{{ runStatusText(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="通过率" width="100">
+          <el-table-column label="通过率" width="90">
             <template #default="{ row }">
-              {{ row.summary_json && row.summary_json.pass_rate ? (row.summary_json.pass_rate * 100).toFixed(1) + '%' : '-' }}
+              {{ row.summary_json && row.summary_json.pass_rate != null ? (row.summary_json.pass_rate * 100).toFixed(1) + '%' : '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="平均分" width="90">
+          <el-table-column label="平均分" width="80">
             <template #default="{ row }">{{ row.summary_json && row.summary_json.avg_score != null ? row.summary_json.avg_score : '-' }}</template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" width="170" />
-          <el-table-column label="操作" width="180">
+          <el-table-column prop="created_at" label="创建时间" width="170" show-overflow-tooltip />
+          <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <el-button size="small" @click="openResults(row)">查看结果</el-button>
               <el-button size="small" type="warning" @click="rerun(row)" :disabled="row.status === 'running'">重跑</el-button>
@@ -233,23 +233,31 @@
           </template>
         </el-dialog>
 
-        <el-dialog v-model="resultDialog" title="评测结果" width="820px">
+        <el-dialog v-model="resultDialog" title="评测结果" width="900px">
           <el-alert v-if="currentRun" :title="`状态：${runStatusText(currentRun.status)}`" :type="runTagType(currentRun.status) === 'danger' ? 'error' : 'info'" :closable="false" style="margin-bottom: 12px" />
           <el-alert v-if="currentRun && currentRun.status === 'failed' && currentRun.error" :title="`失败原因：${currentRun.error}`" type="error" :closable="false" style="margin-bottom: 12px" />
-          <el-table :data="resultList" v-loading="resultLoading" size="small" border max-height="460">
-            <el-table-column prop="case_name" label="用例" width="180" />
-            <el-table-column label="得分" width="80">
+          <el-table :data="resultList" v-loading="resultLoading" size="small" border :show-overflow-tooltip="true">
+            <el-table-column prop="case_name" label="用例" width="200" show-overflow-tooltip />
+            <el-table-column label="得分" width="70">
               <template #default="{ row }">{{ row.score != null ? row.score : '-' }}</template>
             </el-table-column>
             <el-table-column label="通过" width="70">
               <template #default="{ row }">
-                <el-tag v-if="row.passed === true" type="success">通过</el-tag>
-                <el-tag v-else-if="row.passed === false" type="danger">未过</el-tag>
-                <el-tag v-else type="info">待判</el-tag>
+                <el-tag v-if="row.passed === true" type="success" size="small">通过</el-tag>
+                <el-tag v-else-if="row.passed === false" type="danger" size="small">未过</el-tag>
+                <el-tag v-else type="info" size="small">待判</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="output" label="模型输出" show-overflow-tooltip />
-            <el-table-column prop="judge_note" label="判分说明" show-overflow-tooltip />
+            <el-table-column label="模型输出" min-width="220">
+              <template #default="{ row }">
+                <span class="cell-clip" :title="row.output">{{ truncate(row.output, 80) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="判分说明" min-width="180">
+              <template #default="{ row }">
+                <span class="cell-clip" :title="row.judge_note">{{ truncate(row.judge_note, 60) }}</span>
+              </template>
+            </el-table-column>
           </el-table>
         </el-dialog>
       </el-tab-pane>
@@ -488,6 +496,11 @@ function runStatusText(s) {
 function runTagType(s) {
   return { pending: 'info', running: 'warning', completed: 'success', failed: 'danger' }[s] || 'info'
 }
+function truncate(text, n) {
+  if (text == null) return '-'
+  const s = String(text)
+  return s.length > n ? s.slice(0, n) + '…' : s
+}
 async function openResults(run) {
   currentRun.value = run
   resultDialog.value = true
@@ -582,6 +595,7 @@ onBeforeUnmount(() => stopPoll())
 .stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .stat-cards .stat-n { font-size: 22px; font-weight: 700; color: #303133; line-height: 1.4; }
 .stat-cards .el-card__header { font-size: 13px; color: #909399; font-weight: 500; }
+.cell-clip { display: inline-block; max-width: 100%; vertical-align: middle; line-height: 1.4; }
 .dash-toolbar, .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .ds-name { font-weight: 600; margin-right: 12px; }
 </style>

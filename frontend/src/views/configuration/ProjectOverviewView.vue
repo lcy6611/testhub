@@ -766,7 +766,7 @@ onMounted(async () => {
   } catch (e) {
     ElMessage.error('加载项目列表失败')
   }
-  if (projects.value.length === 1) {
+  if (projects.value.length >= 1) {
     selectedProjectId.value = projects.value[0].id
     await onProjectChange()
   }

@@ -176,7 +176,7 @@ class AIModelConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIModelConfig
         fields = ['id', 'name', 'model_type', 'model_type_display', 'role', 'role_display',
-                 'api_key', 'api_key_masked', 'base_url', 'model_name', 'max_tokens', 'temperature', 'top_p', 
+                 'api_key', 'api_key_masked', 'api_key_env', 'base_url', 'model_name', 'max_tokens', 'temperature', 'top_p',
                  'is_active', 'created_by', 'created_by_name', 'created_at', 'updated_at']
         read_only_fields = ['created_by', 'created_by_name']
         extra_kwargs = {

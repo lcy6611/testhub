@@ -28,7 +28,7 @@ def _get_vision_config() -> Optional[Dict[str, Any]]:
             return None
         return {
             "base_url": cfg.base_url.rstrip("/"),
-            "api_key": cfg.api_key or "",
+            "api_key": cfg.resolve_api_key() or "",
             "model_name": cfg.model_name,
             "max_tokens": cfg.max_tokens or 4096,
             "temperature": cfg.temperature or 0.3,

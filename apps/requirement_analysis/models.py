@@ -267,6 +267,8 @@ class AIModelConfig(models.Model):
     model_type = models.CharField(max_length=20, choices=MODEL_CHOICES, verbose_name='模型类型')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, verbose_name='角色')
     api_key = models.CharField(max_length=200, verbose_name='API Key', blank=True, null=True)
+    api_key_env = models.CharField(max_length=100, verbose_name='API Key 环境变量名', blank=True, null=True,
+                                   help_text='若填写，运行时优先从同名环境变量读取密钥，避免明文入库')
     base_url = models.URLField(verbose_name='API Base URL')
     model_name = models.CharField(max_length=100, verbose_name='模型名称')
     max_tokens = models.IntegerField(default=8192, verbose_name='最大Token数')
@@ -282,7 +284,16 @@ class AIModelConfig(models.Model):
         verbose_name = 'AI模型配置'
         verbose_name_plural = 'AI模型配置'
         unique_together = ('model_type', 'role', 'is_active')  # 每种角色只能有一个活跃配置
-    
+
+    def resolve_api_key(self) -> str:
+        """返回最终使用的 API Key：优先环境变量，回退到库内明文。"""
+        import os
+        if self.api_key_env:
+            env_val = os.environ.get(self.api_key_env)
+            if env_val:
+                return env_val
+        return self.api_key or ''
+
     def __str__(self):
         return f"{self.get_model_type_display()} - {self.get_role_display()}"
     
@@ -640,7 +651,7 @@ class AIModelService:
     ) -> Dict[str, Any]:
         """调用OpenAI兼容格式的API"""
         headers = {
-            'Authorization': f'Bearer {config.api_key}',
+            'Authorization': f'Bearer {config.resolve_api_key()}',
             'Content-Type': 'application/json'
         }
 
@@ -740,7 +751,7 @@ class AIModelService:
     ) -> str:
         """流式调用 OpenAI 兼容 API，每收到一段内容就调用 on_chunk(text)，返回完整内容。"""
         headers = {
-            'Authorization': f'Bearer {config.api_key}',
+            'Authorization': f'Bearer {config.resolve_api_key()}',
             'Content-Type': 'application/json'
         }
         data, effective_max_tokens = AIModelService._build_api_payload(

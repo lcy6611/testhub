@@ -284,6 +284,22 @@ else:
     _cors_allowed_raw = env('CORS_ALLOWED_ORIGINS', default='http://localhost:3000')
     CORS_ALLOWED_ORIGINS = [s.strip() for s in _cors_allowed_raw.split(',') if s.strip()]
 
+# 媒体文件 / 静态文件直接给响应加上 CORS 头，方便不同端口/IP 间访问
+CORS_ALLOW_HEADERS = (CORS_ALLOW_HEADERS + [
+    'range',
+])
+CORS_EXPOSE_HEADERS = [
+    'accept-ranges',
+    'content-length',
+    'content-range',
+    'content-type',
+]
+
+# 即便不在 CORS_ALLOWED_ORIGINS 白名单的来源（如局域网 IP 直连）也能拿到附件
+# 仅在 DEBUG 模式下启用，避免生产环境被打
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
 # CSRF Settings
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",

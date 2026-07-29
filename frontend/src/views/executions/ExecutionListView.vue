@@ -413,7 +413,7 @@ const createPlan = async () => {
 }
 
 const viewPlan = (id) => {
-  router.push(`/ai-generation/executions/${id}`)
+  router.push(`/executions/${id}`)
 }
 
 const editPlan = async (plan) => {

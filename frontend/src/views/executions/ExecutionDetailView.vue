@@ -116,19 +116,23 @@
                     <el-icon><List /></el-icon>
                     步骤执行（联动至用例状态）
                   </span>
+                  <el-tag v-if="caseRow._stepsLoaded" size="small" type="info">
+                    {{ (caseRow.step_records || []).length }} 步
+                  </el-tag>
                   <el-button
-                    v-if="!caseRow._stepsLoaded"
+                    v-if="caseRow._stepsLoaded && (!caseRow.step_records || !caseRow.step_records.length)"
                     size="small"
                     type="primary"
                     plain
                     @click="initCaseSteps(caseRow, run.id)"
                   >
-                    初始化步骤
+                    同步步骤
                   </el-button>
                 </div>
+                <div v-if="caseRow._stepsLoading" class="loading-text">同步步骤中…</div>
                 <el-table
-                  v-if="caseRow._stepsLoaded"
-                  :data="caseRow.step_records || []"
+                  v-else-if="caseRow._stepsLoaded && caseRow.step_records && caseRow.step_records.length"
+                  :data="caseRow.step_records"
                   size="small"
                   :show-overflow-tooltip="true"
                   class="steps-table"
@@ -171,9 +175,11 @@
                     </template>
                   </el-table-column>
                 </el-table>
+                <div v-else-if="caseRow._stepsLoaded" class="case-steps-empty">
+                  <el-empty description="该用例暂无步骤，请在 TestCase 中补充" :image-size="60" />
+                </div>
                 <div v-else class="case-steps-empty">
-                  <el-empty v-if="!caseRow._stepsLoading" description="点击右上角「初始化步骤」从 TestCase 同步" :image-size="60" />
-                  <div v-else class="loading-text">同步中...</div>
+                  <el-empty description="展开后将自动同步步骤" :image-size="60" />
                 </div>
               </div>
             </template>
@@ -300,6 +306,19 @@ const fetchTestPlan = async () => {
     const planId = route.params.id
     const response = await api.get(`/executions/plans/${planId}/`)
     testPlan.value = response.data
+    // 默认展开每个 run 的第一行，并预加载其步骤，方便用户直观看到「折叠+步骤」能力
+    if (testPlan.value.test_runs && testPlan.value.test_runs.length) {
+      for (const run of testPlan.value.test_runs) {
+        run.expandedRowKeys = []
+        if (run.run_cases && run.run_cases.length) {
+          const first = run.run_cases[0]
+          first._expanded = true
+          run.expandedRowKeys.push(first.id)
+          // 预拉一次步骤（即便没有步骤，也只是空列表；展开会自动 init-steps 兜底）
+          loadCaseSteps(first)
+        }
+      }
+    }
   } catch (error) {
     ElMessage.error('获取测试计划失败')
   }
@@ -323,7 +342,7 @@ const initCaseSteps = async (runCase, runId) => {
   try {
     await api.post(`/executions/run_cases/${runCase.id}/init-steps/`)
     await loadCaseSteps(runCase)
-    ElMessage.success('步骤已初始化')
+    ElMessage.success('步骤已同步')
   } catch (e) {
     ElMessage.error('初始化失败：' + (e.message || ''))
   } finally {
@@ -331,10 +350,22 @@ const initCaseSteps = async (runCase, runId) => {
   }
 }
 
-// 展开/收起某 case 时按需加载
+// 展开/收起某 case 时按需加载；若没步骤则自动从 TestCase 同步
 const handleExpandChange = async (row, _expandedRows, _runId) => {
-  if (row._expanded && !row._stepsLoaded) {
-    await loadCaseSteps(row)
+  if (row._expanded) {
+    if (!row._stepsLoaded) {
+      row._stepsLoading = true
+      try {
+        // 先尝试拉一次，如果列表为空且有 testcase id，则自动 init-steps 同步
+        await loadCaseSteps(row)
+        if ((!row.step_records || !row.step_records.length) && row.testcase_id) {
+          await api.post(`/executions/run_cases/${row.id}/init-steps/`)
+          await loadCaseSteps(row)
+        }
+      } finally {
+        row._stepsLoading = false
+      }
+    }
   }
 }
 

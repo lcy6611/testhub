@@ -161,12 +161,21 @@
           <span class="time-text">{{ formatTime(row.created_at) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="openEditDialog(row)">详情</el-button>
-          <el-button size="small" link type="success" @click="quickStatus(row, 'in_progress')">处理中</el-button>
-          <el-button size="small" link type="warning" @click="quickStatus(row, 'resolved')">已修复</el-button>
-          <el-button size="small" link type="danger" @click="confirmDelete(row)">删除</el-button>
+          <el-dropdown trigger="click" @command="(cmd) => handleRowCmd(cmd, row)">
+            <el-button size="small" type="primary" link>
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="detail">详情</el-dropdown-item>
+                <el-dropdown-item command="in_progress">处理中</el-dropdown-item>
+                <el-dropdown-item command="resolved">已修复</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -247,8 +256,9 @@
             <el-radio value="ai">AI 分析</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="附件" v-if="editing">
+        <el-form-item label="附件">
           <el-upload
+            v-if="editing"
             :http-request="uploadAtt"
             :show-file-list="false"
             multiple
@@ -262,32 +272,37 @@
               <div class="upload-tip">支持多文件；图片会展示缩略图，日志可下载</div>
             </template>
           </el-upload>
-          <div class="att-grid" v-if="form.attachments && form.attachments.length">
-            <div v-for="att in form.attachments" :key="att.id" class="att-card">
-              <el-image
-                v-if="att.kind === 'screenshot'"
-                :src="att.file_url"
-                :preview-src-list="form.attachments.filter(a => a.kind === 'screenshot').map(a => a.file_url)"
-                :preview-teleported="true"
-                fit="cover"
-                class="att-card-img"
-              />
-              <a v-else :href="att.file_url" target="_blank" class="att-card-file">
-                <el-icon><Document /></el-icon>
-                <span>{{ att.original_name || '附件' }}</span>
-              </a>
-              <el-button
-                size="small"
-                type="danger"
-                link
-                class="att-del"
-                @click="removeAtt(att)"
-              >
-                <el-icon><Delete /></el-icon>
-              </el-button>
-              <div class="att-cap">{{ att.caption || att.original_name || '' }}</div>
+          <el-button v-else type="primary" plain @click="createDraftAndUpload">
+            <el-icon><Upload /></el-icon> 先创建 BUG 后再上传附件
+          </el-button>
+          <template v-if="editing">
+            <div class="att-grid" v-if="form.attachments && form.attachments.length">
+              <div v-for="att in form.attachments" :key="att.id" class="att-card">
+                <el-image
+                  v-if="att.kind === 'screenshot'"
+                  :src="att.file_url"
+                  :preview-src-list="form.attachments.filter(a => a.kind === 'screenshot').map(a => a.file_url)"
+                  :preview-teleported="true"
+                  fit="cover"
+                  class="att-card-img"
+                />
+                <a v-else :href="att.file_url" target="_blank" class="att-card-file">
+                  <el-icon><Document /></el-icon>
+                  <span>{{ att.original_name || '附件' }}</span>
+                </a>
+                <el-button
+                  size="small"
+                  type="danger"
+                  link
+                  class="att-del"
+                  @click="removeAtt(att)"
+                >
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+                <div class="att-cap">{{ att.caption || att.original_name || '' }}</div>
+              </div>
             </div>
-          </div>
+          </template>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -304,7 +319,7 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Warning, Plus, Search, Document, Upload, Delete } from '@element-plus/icons-vue'
+import { Warning, Plus, Search, Document, Upload, Delete, ArrowDown } from '@element-plus/icons-vue'
 import {
   getDefects, getDefect, createDefect, patchDefect, deleteDefect,
   uploadDefectAttachment, deleteDefectAttachment
@@ -437,7 +452,60 @@ const openCreateDialog = () => {
     description: '', steps_to_reproduce: '', environment: '',
     source: 'manual', attachments: []
   })
+  // 默认带入所选项目的默认环境
+  applyProjectEnvironment(form.project)
   dialogVisible.value = true
+}
+
+// 从 projects 列表中查找 project 的默认环境并填入 form.environment
+const applyProjectEnvironment = (projectId) => {
+  if (!projectId) return
+  const proj = projects.value.find(p => p.id === projectId)
+  if (!proj) return
+  const envs = proj.environments || []
+  if (!envs.length) return
+  // 优先 is_default=True，否则取第一个
+  const def = envs.find(e => e.is_default) || envs[0]
+  const parts = []
+  if (def.name) parts.push(def.name)
+  if (def.base_url) parts.push(def.base_url)
+  if (parts.length) {
+    form.environment = parts.join(' / ')
+  }
+}
+
+// 新建时先创建草稿 BUG 再进入编辑态允许上传附件
+const createDraftAndUpload = async () => {
+  if (!form.title.trim()) {
+    ElMessage.warning('请先填写标题，再上传附件')
+    return
+  }
+  if (!form.project) {
+    ElMessage.warning('请选择项目')
+    return
+  }
+  saving.value = true
+  try {
+    const res = await createDefect({
+      title: form.title,
+      project: form.project,
+      severity: form.severity,
+      status: form.status,
+      assigned_to: form.assigned_to || null,
+      description: form.description,
+      steps_to_reproduce: form.steps_to_reproduce,
+      environment: form.environment,
+      source: form.source
+    })
+    const created = res.data || res
+    ElMessage.success('已创建 BUG #' + created.id + '，现在可上传附件')
+    editing.value = created
+    form.attachments = created.attachments || []
+  } catch (e) {
+    ElMessage.error('创建失败：' + (e.message || ''))
+  } finally {
+    saving.value = false
+  }
 }
 
 const openEditDialog = async (row) => {
@@ -562,6 +630,26 @@ const confirmDelete = async (row) => {
     if (e !== 'cancel') ElMessage.error('删除失败：' + (e.message || ''))
   }
 }
+
+// 操作列下拉菜单命令分发
+const handleRowCmd = (cmd, row) => {
+  if (cmd === 'detail') {
+    openEditDialog(row)
+  } else if (cmd === 'in_progress') {
+    quickStatus(row, 'in_progress')
+  } else if (cmd === 'resolved') {
+    quickStatus(row, 'resolved')
+  } else if (cmd === 'delete') {
+    confirmDelete(row)
+  }
+}
+
+// 监听项目变化，自动带入默认环境（编辑/新建均生效）
+watch(() => form.project, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    applyProjectEnvironment(newId)
+  }
+})
 
 const severityTagType = (s) => ({ S1: 'danger', S2: 'warning', S3: 'info', S4: '' })[s] || ''
 const statusTagType = (s) => ({

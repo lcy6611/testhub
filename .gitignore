@@ -21,6 +21,8 @@ media/requirement_docs/*
 !media/requirement_docs/.gitkeep
 media/ai_recording/*
 !media/ai_recording/.gitkeep
+media/defects/*
+!media/defects/.gitkeep
 
 # 忽略前端文件
 frontend/node_modules/

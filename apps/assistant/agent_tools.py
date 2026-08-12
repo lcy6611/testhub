@@ -1428,13 +1428,28 @@ def _list_users(**kwargs) -> Dict[str, Any]:
 # ────────────────────────── 测试用例（扩展） ──────────────────────────
 
 def _get_testcase_detail(**kwargs) -> Dict[str, Any]:
-    """查询单条测试用例详情"""
+    """查询单条测试用例详情（含步骤、附件、评论、关联需求/版本）。"""
     from apps.testcases.models import TestCase
     tc_id = kwargs.get("testcase_id")
     try:
-        tc = TestCase.objects.select_related("project", "author", "assignee").get(id=tc_id)
+        tc = TestCase.objects.select_related("project", "author", "assignee", "requirement").prefetch_related(
+            "step_details", "attachments", "attachments__uploaded_by", "comments", "comments__author", "versions"
+        ).get(id=tc_id)
     except TestCase.DoesNotExist:
         return {"error": f"用例 {tc_id} 不存在"}
+
+    def _file_url(att):
+        if not att.file:
+            return ""
+        try:
+            url = att.file.url
+        except Exception:
+            return ""
+        if url.startswith("http://") or url.startswith("https://"):
+            from urllib.parse import urlparse
+            return urlparse(url).path or url
+        return url
+
     return {
         "id": tc.id,
         "title": tc.title,
@@ -1446,10 +1461,44 @@ def _get_testcase_detail(**kwargs) -> Dict[str, Any]:
         "status": tc.status,
         "test_type": tc.test_type,
         "tags": tc.tags,
-        "project": tc.project.name,
-        "author": tc.author.username,
+        "project": {"id": tc.project_id, "name": tc.project.name} if tc.project else None,
+        "author": tc.author.username if tc.author else None,
         "assignee": tc.assignee.username if tc.assignee else None,
-        "created_at": tc.created_at.isoformat(),
+        "created_at": tc.created_at.isoformat() if tc.created_at else None,
+        "updated_at": tc.updated_at.isoformat() if tc.updated_at else None,
+        "requirement": {"id": tc.requirement_id, "name": tc.requirement.requirement_name} if tc.requirement else None,
+        "versions": [{"id": v.id, "name": v.name} for v in tc.versions.all()],
+        "step_details": [
+            {
+                "id": s.id,
+                "step_number": s.step_number,
+                "action": s.action,
+                "expected": s.expected,
+            }
+            for s in tc.step_details.all().order_by("step_number")
+        ],
+        "attachments": [
+            {
+                "id": a.id,
+                "file_url": _file_url(a),
+                "original_name": a.original_name,
+                "size_bytes": a.size_bytes,
+                "mime_type": a.mime_type,
+                "caption": a.caption,
+                "uploaded_by": a.uploaded_by.username if a.uploaded_by else None,
+                "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
+            }
+            for a in tc.attachments.all()
+        ],
+        "comments": [
+            {
+                "id": c.id,
+                "content": c.content,
+                "author": c.author.username if c.author else None,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in tc.comments.all().order_by("created_at")
+        ],
     }
 
 
@@ -2240,6 +2289,65 @@ def _list_defects(**kwargs) -> Dict[str, Any]:
     return {"total": qs.count(), "items": items}
 
 
+def _get_defect_detail(**kwargs) -> Dict[str, Any]:
+    """查询单条缺陷详情（含描述、复现步骤、环境、附件截图、关联信息等）。"""
+    from apps.defects.models import Defect
+    defect_id = kwargs.get("defect_id")
+    try:
+        defect = Defect.objects.select_related(
+            "project", "reported_by", "assigned_to", "requirement", "test_run_case", "test_run"
+        ).prefetch_related(
+            "attachments", "attachments__uploaded_by"
+        ).get(id=defect_id)
+    except Defect.DoesNotExist:
+        return {"error": f"缺陷 {defect_id} 不存在"}
+
+    def _file_url(att):
+        if not att.file:
+            return ""
+        try:
+            url = att.file.url
+        except Exception:
+            return ""
+        if url.startswith("http://") or url.startswith("https://"):
+            from urllib.parse import urlparse
+            return urlparse(url).path or url
+        return url
+
+    return {
+        "id": defect.id,
+        "title": defect.title,
+        "description": defect.description,
+        "severity": defect.severity,
+        "status": defect.status,
+        "steps_to_reproduce": defect.steps_to_reproduce,
+        "environment": defect.environment,
+        "source": defect.source,
+        "project": {"id": defect.project_id, "name": defect.project.name} if defect.project else None,
+        "reported_by": defect.reported_by.username if defect.reported_by else None,
+        "assigned_to": defect.assigned_to.username if defect.assigned_to else None,
+        "requirement": {"id": defect.requirement_id, "name": defect.requirement.requirement_name} if defect.requirement else None,
+        "test_run_case": {"id": defect.test_run_case_id, "title": defect.test_run_case.testcase.title} if defect.test_run_case and defect.test_run_case.testcase else None,
+        "test_run": {"id": defect.test_run_id, "name": defect.test_run.name} if defect.test_run else None,
+        "created_at": defect.created_at.isoformat() if defect.created_at else None,
+        "updated_at": defect.updated_at.isoformat() if defect.updated_at else None,
+        "attachments": [
+            {
+                "id": att.id,
+                "kind": att.kind,
+                "file_url": _file_url(att),
+                "original_name": att.original_name,
+                "size_bytes": att.size_bytes,
+                "mime_type": att.mime_type,
+                "caption": att.caption,
+                "uploaded_by": att.uploaded_by.username if att.uploaded_by else None,
+                "uploaded_at": att.uploaded_at.isoformat() if att.uploaded_at else None,
+            }
+            for att in defect.attachments.all()
+        ],
+    }
+
+
 # ────────────────────────────── 工具注册表 ──────────────────────────────
 
 TOOL_REGISTRY: List[Dict[str, Any]] = [
@@ -2818,7 +2926,7 @@ TOOL_REGISTRY: List[Dict[str, Any]] = [
     # ===== 测试用例（扩展） =====
     {
         "name": "get_testcase_detail",
-        "description": "查询单条测试用例详情（含完整步骤、预期结果、标签等）。",
+        "description": "查询单条测试用例详情（含完整步骤 step_details、预期结果、附件、评论、关联需求和版本）。",
         "parameters": {
             "type": "object",
             "properties": {
@@ -3180,6 +3288,18 @@ TOOL_REGISTRY: List[Dict[str, Any]] = [
             "required": [],
         },
         "handler": _list_defects,
+    },
+    {
+        "name": "get_defect_detail",
+        "description": "查询单条缺陷详情（含描述、复现步骤、环境信息、截图附件 file_url、关联需求和执行）。当用户问'这个 bug 具体是什么'、'缺陷详情'、'截图'、'复现步骤'时调用。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "defect_id": {"type": "integer", "description": "缺陷 ID"},
+            },
+            "required": ["defect_id"],
+        },
+        "handler": _get_defect_detail,
     },
 ]
 

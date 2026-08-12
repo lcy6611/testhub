@@ -832,6 +832,13 @@ class BaseBrowserAgent:
         @controller.action('mark_task_complete')
         async def mark_task_complete(task_id: int):
             logger.info(f"[OK] Explicitly marking task {task_id} as completed")
+            # 关键修复：真正把 planned_tasks 中对应任务标记为 completed。
+            # 否则 agent 后续判断“该任务是否已完成”会失真，导致反复重做同一动作（死循环）。
+            if planned_tasks:
+                for t in planned_tasks:
+                    if t['id'] == int(task_id):
+                        t['status'] = 'completed'
+                        break
             if callback:
                 try:
                     data = {'task_id': int(task_id), 'status': 'completed'}
@@ -882,6 +889,7 @@ class BaseBrowserAgent:
         final_task += "    - 每个字段最长不超过 12 个字符（汉字或英文混合），超过的部分你自己截断，不要换行；必须包含至少 2 个可见字符，禁止只输出空格或标点。\n"
         final_task += "11. TASK COMPLETION & DONE: 一旦所有子任务都已标记为 completed，你必须在下一步立刻调用 Done(success=True, text=\"本次任务已全部完成\") 来结束任务，禁止继续产生新的点击/输入/导航操作。\n"
         final_task += "12. EXTRA VERIFICATION STEPS LIMIT: 在所有子任务完成之后，最多允许额外执行 2 步纯验证/检查步骤（例如刷新列表确认数据可见）。超过 2 步仍在重复类似操作将被视为错误，你必须立即调用 Done 结束任务。\n"
+        final_task += "13. TESTHUB 登录凭据与元素：若任务需要登录本平台，直接使用账号 admin / 密码 admin123。用户名输入框 placeholder 含“用户名”，密码输入框 placeholder 含“密码”，登录按钮文字含“登录”。提交登录后必须等待页面跳转（URL 变为含 /ai-generation 或首页路径）并确认登录成功（右上角出现用户菜单或页面不再显示登录表单）；若 5 秒内未成功，重新输入凭据并再次点击登录，最多重试 3 次，禁止在登录未成功时继续后续步骤。\n"
         
         if 'qwen' in self.model_name.lower() or 'deepseek' in self.model_name.lower():
             final_task += "8. EXTREMELY MINIMIZE output tokens for speed. Keep responses as short as possible while maintaining accuracy.\n"
@@ -915,8 +923,10 @@ class BaseBrowserAgent:
         # Callback helper - 添加任务标记跟踪
         last_processed_step = 0
         last_marked_task_id = 0  # 跟踪上一次标记的任务ID
+        last_input_sig = None    # 上一轮输入动作签名，用于循环检测
+        input_repeat_count = 0   # 连续重复相同输入的步数
         async def on_step_end(agent_instance):
-            nonlocal last_processed_step, last_marked_task_id
+            nonlocal last_processed_step, last_marked_task_id, last_input_sig, input_repeat_count
 
             if should_stop:
                 do_stop = await should_stop() if asyncio.iscoroutinefunction(should_stop) else should_stop()
@@ -1019,13 +1029,19 @@ class BaseBrowserAgent:
                                         break
 
                                 if not task_already_marked:
-                                    # 自动补充标记这个任务
+                                    # 自动补充标记：同步更新 planned_tasks 中的状态，
+                                    # 否则 agent 会以为该任务没完成而反复重做同一动作。
+                                    for task in planned_tasks:
+                                        if task['id'] == next_expected_task_id:
+                                            task['status'] = 'completed'
+                                            break
                                     logger.warning(f"[WARN] Auto-fixing: Step {i+1} had actions but no mark_task_complete. Auto-marking task {next_expected_task_id} as completed.")
                                     data = {'task_id': int(next_expected_task_id), 'status': 'completed'}
-                                    if asyncio.iscoroutinefunction(callback):
-                                        await callback(data)
-                                    else:
-                                        callback(data)
+                                    if callback:
+                                        if asyncio.iscoroutinefunction(callback):
+                                            await callback(data)
+                                        else:
+                                            callback(data)
                                     last_marked_task_id = next_expected_task_id
 
                         # 当所有子任务都完成且步数超过“任务数 + 2”时，自动结束以防止无限执行
@@ -1046,6 +1062,55 @@ class BaseBrowserAgent:
                                         raise KeyboardInterrupt("All sub-tasks completed, auto-stopping agent")
                             except Exception as e:
                                 logger.debug(f"auto-stop check failed: {e}")
+
+                        # ===== 激进循环早停：连续重复输入检测 =====
+                        # 统计连续步数里“向同一输入框输入相同内容”的重复动作。
+                        # 阈值 3 远低于 browser-use 内置的 repetition=20，能更早打破死循环。
+                        step_input_sig = None
+                        for action in actions:
+                            action_dict = action.model_dump() if hasattr(action, 'model_dump') else getattr(action, '_action_dict', {})
+                            for key, val in (action_dict.items() if isinstance(action_dict, dict) else []):
+                                if key in ('input_text', 'input') and isinstance(val, dict):
+                                    step_input_sig = (key, str(val.get('text', '')), str(val.get('index', '')))
+                                    break
+                            if step_input_sig:
+                                break
+
+                        if step_input_sig:
+                            if step_input_sig == last_input_sig:
+                                input_repeat_count += 1
+                            else:
+                                input_repeat_count = 1
+                                last_input_sig = step_input_sig
+                        else:
+                            # 非输入动作（如点击登录）会打断重复输入的计数
+                            input_repeat_count = 0
+                            last_input_sig = None
+
+                        if input_repeat_count >= 3:
+                            loop_nudge = (
+                                "⚠️ 循环检测：你已连续多次向同一输入框重复输入相同内容"
+                                f"（'{step_input_sig[1]}'），这是死循环。请立即停止重复，"
+                                "按任务顺序推进：不要再次输入用户名，立即在密码框输入 admin123 "
+                                "并点击登录按钮；完成每个子任务后调用 mark_task_complete 并继续下一子任务。"
+                            )
+                            logger.warning(f"[LOOP] {loop_nudge}")
+                            # 通过 browser-use 的 message_manager 注入强提示，下一轮模型调用即生效
+                            try:
+                                from browser_use.llm.messages import UserMessage as _LoopUserMsg
+                                mm = getattr(agent_instance, '_message_manager', None)
+                                if mm is not None and hasattr(mm, '_add_context_message'):
+                                    mm._add_context_message(_LoopUserMsg(content=loop_nudge))
+                            except Exception as inj_err:
+                                logger.warning(f"[LOOP] Failed to inject loop nudge: {inj_err}")
+                            if callback:
+                                if asyncio.iscoroutinefunction(callback):
+                                    await callback({'type': 'log', 'content': '\n' + loop_nudge + '\n'})
+                                else:
+                                    callback({'type': 'log', 'content': '\n' + loop_nudge + '\n'})
+                            # 极端情况：提示无效仍持续重复，强制结束以免耗尽 100 步预算
+                            if input_repeat_count >= 12:
+                                raise KeyboardInterrupt("Repeated-input loop detected, force stopping agent")
 
                     except Exception as e:
                         logger.warning(f"[WARN] Error in on_step_end processing: {e}")

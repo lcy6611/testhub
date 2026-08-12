@@ -19,6 +19,8 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
+    // 允许 Docker 网络内其他容器（如 UI 自动化 backend 容器）通过服务名访问前端
+    allowedHosts: true,
     // 本地开发默认 8001；Docker 下通过环境变量 VITE_PROXY_TARGET 指向 backend:8000
     proxy: (() => {
       const target = process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8001'

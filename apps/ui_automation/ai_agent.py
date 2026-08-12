@@ -42,6 +42,29 @@ def _resolve_ai_execution_mode(execution_mode: str) -> str:
     return 'text'
 
 
+def _normalize_agent_history(history):
+    """把 browser-use 返回的 AgentHistoryList 归一化为结构化 dict，避免调用方对结果对象调用
+    .get() 时因框架 API 版本差异报错（'AgentHistoryList' object has no attribute 'get'）。"""
+    if isinstance(history, dict):
+        return history
+    final = None
+    if hasattr(history, "final_result"):
+        try:
+            final = history.final_result()
+        except Exception:
+            final = None
+    steps = []
+    if hasattr(history, "history"):
+        for h in (history.history or []):
+            steps.append(getattr(h, "model_output", None))
+    return {
+        "status": "completed",
+        "steps": steps,
+        "screenshots": [],
+        "final_result": final,
+    }
+
+
 def run_full_process_sync(task_description: str, analysis_callback=None, step_callback=None, should_stop=None, execution_mode='text', enable_gif=True, case_name=None, headless=None):
     """统一入口：文本模式走文本流水线，视觉模式走视觉流水线。headless 对所有模式生效。"""
     resolved_mode = _resolve_ai_execution_mode(execution_mode)
@@ -52,7 +75,7 @@ def run_full_process_sync(task_description: str, analysis_callback=None, step_ca
 
     if resolved_mode == 'vision':
         from .vision_runner import run_vision_pipeline_sync
-        return run_vision_pipeline_sync(
+        return _normalize_agent_history(run_vision_pipeline_sync(
             task_description,
             analysis_callback=analysis_callback,
             step_callback=step_callback,
@@ -60,10 +83,11 @@ def run_full_process_sync(task_description: str, analysis_callback=None, step_ca
             enable_gif=enable_gif,
             case_name=case_name,
             headless=headless,
-        )
+        ))
 
     agent = BrowserAgent(execution_mode='text', enable_gif=enable_gif, case_name=case_name, headless=headless)
 
     logger.info(f"DEBUG: Agent created ({type(agent).__name__}), starting asyncio.run")
-    return asyncio.run(agent.run_full_process(task_description, analysis_callback, step_callback, should_stop))
+    history = asyncio.run(agent.run_full_process(task_description, analysis_callback, step_callback, should_stop))
+    return _normalize_agent_history(history)
 

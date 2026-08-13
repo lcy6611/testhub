@@ -6,6 +6,7 @@ import time
 import json
 from datetime import datetime
 from django.utils import timezone
+from django.apps import apps
 from django.db import connection
 from playwright.sync_api import sync_playwright
 from selenium import webdriver
@@ -202,6 +203,16 @@ class TestExecutor:
                     for ss in suite_scripts:
                         script = ss.test_script
                         script_started_at = timezone.now()
+                        # 后置业务断言所需的 DB 基线计数（脚本步骤执行前快照）
+                        _baseline_counts = {}
+                        _script_assertions = getattr(script, 'assertions', None) or []
+                        for _a in _script_assertions:
+                            if _a.get('type') == 'record_count' and _a.get('model'):
+                                try:
+                                    _m = apps.get_model(_a.get('model'))
+                                    _baseline_counts[_a.get('model')] = _m.objects.filter(**(_a.get('filter') or {})).count()
+                                except Exception:
+                                    pass
                         script_result = {
                             'test_case_id': script.id,
                             'test_case_name': script.name,
@@ -316,6 +327,35 @@ class TestExecutor:
 
                                     if step.wait_after:
                                         self.current_page.wait_for_timeout(step.wait_after)
+
+                                # ===== 脚本级后置业务断言：动作成功 ≠ 业务落库（治假绿）=====
+                                if script_result['status'] == 'passed' and getattr(script, 'assertions', None):
+                                    for _a in (script.assertions or []):
+                                        _atype = _a.get('type')
+                                        if _atype == 'page_contains':
+                                            try:
+                                                _body = self.current_page.text_content('body', timeout=5000) or ''
+                                            except Exception:
+                                                _body = ''
+                                            if _a.get('text') not in _body:
+                                                script_result['status'] = 'failed'
+                                                script_result['error'] = f"后置断言失败(page_contains): 页面未包含文本 '{_a.get('text')}'"
+                                                break
+                                        elif _atype == 'record_count':
+                                            try:
+                                                _m = apps.get_model(_a.get('model'))
+                                                _before = _baseline_counts.get(_a.get('model'))
+                                                _after = _m.objects.filter(**(_a.get('filter') or {})).count()
+                                                _delta = _after - (_before or 0)
+                                                if _delta != _a.get('expect_delta', 1):
+                                                    script_result['status'] = 'failed'
+                                                    script_result['error'] = (f"后置断言失败(record_count): {_a.get('model')} "
+                                                                             f"期望+{_a.get('expect_delta', 1)} 实际+{_delta}")
+                                                    break
+                                            except Exception as _e:
+                                                script_result['status'] = 'failed'
+                                                script_result['error'] = f"后置断言异常(record_count): {_a.get('model')} -> {_e}"
+                                                break
 
                                 if script_result['status'] == 'passed':
                                     passed += 1

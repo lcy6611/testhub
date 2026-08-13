@@ -207,6 +207,12 @@ class TestScript(models.Model):
     framework = models.CharField(max_length=20, choices=FRAMEWORK_CHOICES, verbose_name='执行框架', default='playwright', blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    assertions = models.JSONField(
+        null=True, blank=True, default=list, verbose_name='后置业务断言',
+        help_text='脚本级后置断言，用于校验业务结果是否真落库。'
+                  '示例: [{"type":"record_count","model":"app_label.Model","filter":{...},"expect_delta":1},'
+                  '{"type":"page_contains","text":"创建成功"}]'
+    )
 
     # ===== 资产复用治理：克隆溯源 =====
     cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')

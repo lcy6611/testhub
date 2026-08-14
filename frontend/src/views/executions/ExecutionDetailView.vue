@@ -193,9 +193,33 @@
           <el-table-column label="测试用例" min-width="280">
             <template #default="scope">
               <div class="case-title-cell">
-                <el-link type="primary" :underline="false" @click="scope.row._expanded = !scope.row._expanded; handleExpandChange(scope.row, [], null)">
-                  {{ scope.row.testcase }}
-                </el-link>
+                <el-popover
+                  placement="top-start"
+                  trigger="hover"
+                  :width="320"
+                  :show-after="200"
+                  popper-class="case-preview-popover">
+                  <template #reference>
+                    <el-link type="primary" :underline="false" @click="scope.row._expanded = !scope.row._expanded; handleExpandChange(scope.row, [], null)">
+                      {{ scope.row.testcase }}
+                    </el-link>
+                  </template>
+                  <div class="case-preview">
+                    <div class="case-preview__title">{{ scope.row.testcase }}</div>
+                    <div class="case-preview__row">
+                      <span class="case-preview__label">状态</span>
+                      <el-tag :type="getStatusType(scope.row.status)" size="small">{{ getStatusText(scope.row.status) }}</el-tag>
+                    </div>
+                    <div class="case-preview__row">
+                      <span class="case-preview__label">步骤</span>
+                      <span>{{ (scope.row.step_records || []).length }} 步</span>
+                    </div>
+                    <div class="case-preview__row case-preview__row--remark">
+                      <span class="case-preview__label">备注</span>
+                      <span class="case-preview__remark">{{ scope.row.comments || '—' }}</span>
+                    </div>
+                  </div>
+                </el-popover>
                 <el-tag v-if="scope.row.step_records && scope.row.step_records.length" size="small" type="info">
                   {{ scope.row.step_records.length }} 步
                 </el-tag>
@@ -228,7 +252,7 @@
               </el-input>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="scope">
               <el-button
                 size="small"
@@ -236,6 +260,12 @@
                 :icon="Clock"
                 @click="viewCaseHistory(scope.row)">
                 历史
+              </el-button>
+              <el-button
+                size="small"
+                :icon="View"
+                @click="openCaseDrawer(scope.row)">
+                详情
               </el-button>
             </template>
           </el-table-column>
@@ -278,6 +308,51 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 用例执行详情抽屉 -->
+    <el-drawer
+      v-model="drawerVisible"
+      title="用例执行详情"
+      direction="rtl"
+      size="46%"
+      :destroy-on-close="true">
+      <template v-if="drawerCase">
+        <el-descriptions :column="1" border class="drawer-desc">
+          <el-descriptions-item label="测试用例">{{ drawerCase.testcase }}</el-descriptions-item>
+          <el-descriptions-item label="执行状态">
+            <el-tag :type="getStatusType(drawerCase.status)">{{ getStatusText(drawerCase.status) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">{{ drawerCase.comments || '—' }}</el-descriptions-item>
+        </el-descriptions>
+
+        <h4 class="drawer-subtitle">执行步骤</h4>
+        <el-table :data="drawerCase.step_records || []" size="small" border>
+          <el-table-column prop="step_number" label="#" width="55" />
+          <el-table-column prop="action" label="操作" min-width="280" show-overflow-tooltip />
+          <el-table-column prop="expected" label="预期" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="actual_result" label="实际结果" min-width="180" show-overflow-tooltip />
+          <el-table-column label="状态" width="100">
+            <template #default="s">
+              <el-tag :type="getStatusType(s.row.status)" size="small">{{ getStatusText(s.row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <h4 class="drawer-subtitle">执行历史</h4>
+        <el-table :data="drawerHistory" size="small" border>
+          <el-table-column label="状态" width="100">
+            <template #default="s">
+              <el-tag :type="getStatusType(s.row.status)">{{ getStatusText(s.row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="comments" label="备注" show-overflow-tooltip />
+          <el-table-column prop="executed_by.username" label="执行者" width="120" />
+          <el-table-column label="执行时间" width="180">
+            <template #default="s">{{ formatDate(s.row.executed_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -287,7 +362,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Delete, Clock, Document, CircleCheck, CircleClose,
-  WarningFilled, QuestionFilled, Stamp, FolderOpened, List
+  WarningFilled, QuestionFilled, Stamp, FolderOpened, List, View
 } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 
@@ -295,6 +370,24 @@ const route = useRoute()
 const testPlan = ref({})
 const historyDialogVisible = ref(false)
 const currentCaseHistory = ref([])
+const drawerVisible = ref(false)
+const drawerCase = ref(null)
+const drawerHistory = ref([])
+
+// 打开用例详情抽屉：确保步骤已加载并拉取历史
+const openCaseDrawer = async (runCase) => {
+  drawerCase.value = runCase
+  if (!runCase._stepsLoaded) {
+    await loadCaseSteps(runCase)
+  }
+  try {
+    const res = await api.get(`/executions/run_cases/${runCase.id}/history/`)
+    drawerHistory.value = res.data || []
+  } catch (e) {
+    drawerHistory.value = []
+  }
+  drawerVisible.value = true
+}
 const selectedCases = ref([])
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -808,5 +901,47 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 用例悬浮预览卡片 */
+.case-preview {
+  font-size: 13px;
+}
+.case-preview__title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+.case-preview__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.case-preview__row--remark {
+  align-items: flex-start;
+}
+.case-preview__label {
+  color: #909399;
+  flex: 0 0 36px;
+}
+.case-preview__remark {
+  color: #606266;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+/* 抽屉内样式 */
+.drawer-desc {
+  margin-bottom: 16px;
+}
+.drawer-subtitle {
+  margin: 20px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  border-left: 3px solid #409eff;
+  padding-left: 8px;
 }
 </style>

@@ -226,30 +226,30 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="执行状态" width="150">
+          <el-table-column label="状态 / 备注" min-width="380">
             <template #default="scope">
-              <el-select
-                v-model="scope.row.status"
-                @change="updateCaseStatus(scope.row)"
-                size="small">
-                <el-option label="未测试" value="untested" />
-                <el-option label="通过" value="passed" />
-                <el-option label="失败" value="failed" />
-                <el-option label="阻塞" value="blocked" />
-                <el-option label="重测" value="retest" />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="备注" min-width="250">
-            <template #default="scope">
-              <el-input
-                v-model="scope.row.comments"
-                placeholder="请输入备注"
-                type="textarea"
-                :rows="2"
-                size="small"
-                @blur="updateCaseDetails(scope.row)">
-              </el-input>
+              <div class="case-status-remark">
+                <el-select
+                  v-model="scope.row.status"
+                  @change="updateCaseStatus(scope.row)"
+                  size="small"
+                  class="case-status-remark__select">
+                  <el-option label="未测试" value="untested" />
+                  <el-option label="通过" value="passed" />
+                  <el-option label="失败" value="failed" />
+                  <el-option label="阻塞" value="blocked" />
+                  <el-option label="重测" value="retest" />
+                </el-select>
+                <el-input
+                  v-model="scope.row.comments"
+                  placeholder="变更状态时一并填写备注"
+                  type="textarea"
+                  :rows="2"
+                  size="small"
+                  class="case-status-remark__input"
+                  @blur="updateCaseDetails(scope.row)">
+                </el-input>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
@@ -901,6 +901,20 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 状态/备注内联合并组件 */
+.case-status-remark {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.case-status-remark__select {
+  flex: 0 0 110px;
+}
+.case-status-remark__input {
+  flex: 1;
+  min-width: 0;
 }
 
 /* 用例悬浮预览卡片 */

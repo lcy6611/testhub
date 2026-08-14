@@ -1377,13 +1377,20 @@ class TestExecutor:
                             step_result['error'] = f"下拉框选项处理异常: {str(e)}"
                             step_result['success'] = False
                         
-                        # 检查并关闭多选下拉框（如果还在显示）
+                        # 检查并关闭下拉框（如果还在显示）
                         if step_result['success']:
                             try:
                                 if self.current_page.locator('.el-select-dropdown').first.is_visible():
-                                    # 点击空白处关闭
-                                    self.current_page.click('body', position={'x': 10, 'y': 10}, timeout=3000)
-                                    self.current_page.wait_for_timeout(500)
+                                    # 优先用 Escape 关闭（与下拉位置无关，最可靠）；
+                                    # 兜底再点空白处，避免个别情况下 Escape 未生效
+                                    try:
+                                        self.current_page.keyboard.press('Escape')
+                                        self.current_page.wait_for_timeout(400)
+                                    except Exception:
+                                        pass
+                                    if self.current_page.locator('.el-select-dropdown').first.is_visible():
+                                        self.current_page.click('body', position={'x': 10, 'y': 10}, timeout=3000)
+                                        self.current_page.wait_for_timeout(500)
                             except:
                                 pass
                         

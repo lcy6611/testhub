@@ -121,15 +121,39 @@
 
 ---
 
-## 六、结论
+## 六、结论（历史：2026-08-12 首次跑出的"假绿"）
 
-- **表面结论（执行器判定）**：套件 `execution_status = passed`，`passed_count = 3`、`failed_count = 0`；3 个脚本各自的 `TestExecution`（156/157/158）均为 `SUCCESS`，共 37 个步骤全部 `success = true`，无任何 `error`。
-- **关键数字**：passed = 3 / failed = 0；落库 DELTA：Defect **+1**、TestCase **0**、TestPlan **0**。
-- **真相（"假绿"）**：虽然脚本 12（新建用例）、脚本 13（新建测试计划）的所有 UI 操作都「未抛异常」而被判为通过，但执行后数据库中 **TestCase 与 TestPlan 数量均为 0 增量**——即这两个脚本的「创建」操作**并未真正落库**。仅脚本 11 的「新建 BUG」成功新增了 1 条 Defect 记录（真落库）。
-- **根因分析**：执行器 `TestExecutor` 对单步的 `success` 判定**仅取决于该动作（click / fill / navigate 等）在 Playwright 层是否抛异常**，并不校验后端是否真正提交成功。新建用例/测试计划这类表单提交，若被后端「必填字段校验」拦截，前端通常仅以报错提示或弹窗返回、而 `.click()` 动作本身仍正常完成——于是执行器误判为通过，形成"假绿"。
-- **建议**：
-  1. 在脚本关键提交步骤后，增加"断言记录已生成"（如按名称回查列表/数据库计数 +1）作为 `success` 的判定条件，而非仅看动作是否抛异常；
-  2. 复跑结论时以 DB 计数 DELTA 作为"真落库"的硬证据，不要只信 `execution_status`。
+> 本節保留首次执行时的"假绿"分析，作为背景。真正的闭环结果见 **第九节**。
+
+- **首次执行表面结论**：套件 `execution_status = passed`，`passed_count = 3`、`failed_count = 0`；37 个步骤全部 `success = true`。
+- **首次执行真相（"假绿"）**：落库 DELTA 为 Defect **+1**、TestCase **0**、TestPlan **0**——脚本 12/13 的创建操作被后端必填校验拦截，并未真落库，仅脚本 11（BUG）真落库。
+- **根因**：执行器对单步 `success` 仅看动作是否抛异常，不校验后端是否真正提交。
+
+## 九、闭环结论（2026-08-14，真绿 ✅）
+
+经修复后，在容器 `testhub_dev-backend-1` 内重跑 Suite15（TestExecutor, playwright/chrome/headless），**连续三次结果一致**：
+
+| 项目 | 结果 |
+|------|------|
+| 套件结论 `execution_status` | **passed** |
+| `passed_count` / `failed_count` | **3 / 0** |
+| 落库 DELTA | Defect **+1**、TestCase **+1**、TestPlan **+1** |
+| 脚本 11（登录并新建BUG） | SUCCESS，缺陷真落库 |
+| 脚本 12（用例页新建用例） | SUCCESS，用例真落库 |
+| 脚本 13（测试计划页新建测试计划） | SUCCESS，计划真落库 |
+
+**本轮修复内容**：
+
+1. **脚本 12（用例）缺必填项**：用例表 `testcases.project_id` 为 NOT NULL，原脚本没选项目 → 后端插入失败。补"归属项目"下拉选择步骤（新建元素 `用例表单-归属项目触发器`，xpath 按 `归属项目` 表单项定位；选项复用 `//li[contains(@class,"el-select-dropdown__item")]`）。
+2. **脚本 13（计划）缺必填项**：计划表单 `planRules` 必填 `name + projects + testcases`。原脚本只选项目。补"版本""测试用例"两个下拉选择步骤（新建元素 `计划表单-版本触发器`/`计划表单-测试用例触发器`）；并在提交前点名称输入框收起"测试用例"多选下拉的遮挡。
+3. **执行器下拉关闭健壮性**（`apps/ui_automation/test_executor.py`）：选项步骤后原本用 `body` 的 `(10,10)` 坐标关闭下拉，但当下拉面板在左上角时会点到面板内部而不生效，残留下拉遮挡"创建/提交"按钮。改为优先 `Escape` 关闭（与位置无关），兜底再点空白处。此修为平台级健壮性提升，对所有 UI 自动化脚本受益。
+
+**数据落点**：脚本步骤与新增元素均写入 `testhub_dev` 库（`ui_script_steps`、`ui_elements`）。注意 venv 默认连的是 `testhub` 空库；Suite15 实际运行于容器所用的 `testhub_dev`。
+
+**验证命令（容器内）**：
+```bash
+docker exec testhub_dev-backend-1 python manage.py shell -c "from apps.ui_automation.models import TestSuite,TestExecutor; s=TestSuite.objects.get(id=15); TestExecutor(s,engine='playwright',browser='chrome',headless=True).run()"
+```
 
 ---
 

@@ -472,6 +472,9 @@
         </el-main>
       </el-container>
     </el-container>
+
+    <!-- 全局悬浮 Hermes 助手图标（可拖动，位置持久化） -->
+    <HermesDock />
   </div>
 </template>
 
@@ -483,6 +486,7 @@ import { useHermesStore } from '@/stores/hermes'
 import { useKbHubStore } from '@/stores/kb-hub'
 import { ElMessage } from 'element-plus'
 import HermesAvatar, { PRESET_MODELS } from '@/components/HermesAvatar.vue'
+import HermesDock from '@/components/HermesDock.vue'
 import {
   Monitor, Folder, Document, Flag, Check, Collection, VideoPlay,
   DataAnalysis, ChatDotRound, DocumentCopy, Link, MagicStick,

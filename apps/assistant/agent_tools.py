@@ -1613,6 +1613,50 @@ def _list_requirement_docs(**kwargs) -> Dict[str, Any]:
     return {"total": qs.count(), "items": items}
 
 
+def _get_requirement_doc(**kwargs) -> Dict[str, Any]:
+    """读取指定需求文档的完整文本内容，供 AI 生成测试用例时作为需求上下文。
+
+    先用 list_requirement_docs 获取 doc_id，再调用本工具取回正文。
+    若文档尚未提取文本，则在此懒提取并落库（extracted_text），供后续复用。
+    """
+    from apps.requirement_analysis.models import RequirementDocument
+
+    doc_id = kwargs.get("doc_id")
+    if not doc_id:
+        return {"error": "请提供 doc_id"}
+    try:
+        doc = RequirementDocument.objects.select_related("project", "uploaded_by").get(id=doc_id)
+    except RequirementDocument.DoesNotExist:
+        return {"error": f"需求文档 {doc_id} 不存在"}
+
+    # 懒提取：首次读取且尚未提取文本时，提取并落库
+    if not doc.extracted_text:
+        try:
+            from apps.requirement_analysis.services import DocumentProcessor
+            text = DocumentProcessor.extract_text(doc)
+            if text and text.strip():
+                doc.extracted_text = text
+                doc.save(update_fields=["extracted_text"])
+        except Exception as e:
+            return {"error": f"提取文档文本失败: {e}"}
+
+    if not doc.extracted_text or not doc.extracted_text.strip():
+        return {"error": "无法从文档中提取到有效内容，可能是不支持的格式或空文档"}
+
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "document_type": doc.document_type,
+        "status": doc.status,
+        "project": doc.project.name if doc.project else None,
+        "uploaded_by": doc.uploaded_by.username if doc.uploaded_by else None,
+        "file_size": doc.file_size,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        "extracted_text": doc.extracted_text,
+        "text_length": len(doc.extracted_text),
+    }
+
+
 def _get_generation_task_status(**kwargs) -> Dict[str, Any]:
     """查询 AI 用例生成任务的状态和结果"""
     from apps.requirement_analysis.models import TestCaseGenerationTask
@@ -3032,6 +3076,18 @@ TOOL_REGISTRY: List[Dict[str, Any]] = [
             "required": [],
         },
         "handler": _list_requirement_docs,
+    },
+    {
+        "name": "get_requirement_doc",
+        "description": "读取指定需求文档的完整文本内容，供 AI 生成测试用例时作为需求上下文。先用 list_requirement_docs 获取 doc_id。文档文本会在首次读取时自动提取并落库。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "doc_id": {"type": "integer", "description": "需求文档ID（来自 list_requirement_docs）"},
+            },
+            "required": ["doc_id"],
+        },
+        "handler": _get_requirement_doc,
     },
     {
         "name": "get_generation_task_status",

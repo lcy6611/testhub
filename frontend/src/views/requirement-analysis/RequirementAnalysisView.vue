@@ -385,6 +385,15 @@
             🔗 知识图谱：{{ graphExpansionHint }}
           </p>
 
+          <!-- 思考过程实时显示区域（模型真实 reasoning_content，深度思考模型可见） -->
+          <div v-if="isGenerating && reasoningContent" class="stream-content-display" style="margin-bottom: 15px;">
+            <div class="stream-header">
+              <span class="stream-title">🧠 AI 思考过程</span>
+              <span class="stream-status">{{ reasoningContent.length }} 字符</span>
+            </div>
+            <div class="stream-content reasoning-content" style="white-space: pre-wrap;">{{ reasoningContent }}</div>
+          </div>
+
           <!-- 流式内容实时显示区域：仅生成中展示，完成后由统一“生成结果”区域承接 -->
           <div v-if="isGenerating && globalOutputMode === 'stream'" class="stream-content-display">
             <div class="stream-header">
@@ -694,6 +703,7 @@ export default {
       // 流式内容累积（与上游一致）
       streamedContent: '',
       streamedReviewContent: '',
+      reasoningContent: '',
       finalTestCases: '',
       showReviewStep: true,
       _localStreamPos: 0,
@@ -1395,6 +1405,7 @@ export default {
       // 重置流式内容（与上游一致）
       this.streamedContent = ''
       this.streamedReviewContent = ''
+      this.reasoningContent = ''
       this.finalTestCases = ''
       this._streamRemainder = ''
 
@@ -1558,6 +1569,8 @@ export default {
             this.enqueueTyping(data.content, 'review')
           } else if (data.type === 'final_content' && data.content) {
             this.enqueueTyping(data.content, 'final')
+          } else if (data.type === 'reasoning' && data.content) {
+            this.reasoningContent += data.content
           }
         }
 
@@ -1915,6 +1928,7 @@ export default {
       // 重置流式内容（与上游一致）
       this.streamedContent = ''
       this.streamedReviewContent = ''
+      this.reasoningContent = ''
       this.finalTestCases = ''
       this._streamRemainder = ''
 

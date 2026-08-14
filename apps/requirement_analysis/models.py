@@ -746,6 +746,7 @@ class AIModelService:
         config,
         messages: List[Dict[str, str]],
         on_chunk: Callable[[str], None],
+        on_reasoning_chunk: Callable[[str], None] = None,
         *,
         min_tokens: int = 0,
     ) -> str:
@@ -797,6 +798,11 @@ class AIModelService:
                         if part:
                             local_parts.append(part)
                             await sync_to_async(on_chunk)(part)
+                        # 透传模型思考过程（DeepSeek-R1/QwQ 等 reasoning_content）
+                        if on_reasoning_chunk is not None:
+                            reasoning = (delta.get("reasoning_content") or delta.get("reasoning") or "") if isinstance(delta, dict) else ""
+                            if reasoning:
+                                await sync_to_async(on_reasoning_chunk)(reasoning)
 
             text = "".join(local_parts)
             nonlocal last_finish_reason
@@ -899,7 +905,7 @@ class AIModelService:
         return "\n\n".join(sections)
 
     @staticmethod
-    async def generate_test_cases_stream(task, on_chunk: Callable[[str], None]) -> str:
+    async def generate_test_cases_stream(task, on_chunk: Callable[[str], None], on_reasoning_chunk: Callable[[str], None] = None) -> str:
         """流式生成测试用例，每收到一段内容就调用 on_chunk(text)，返回完整内容。"""
         writer_prompt = AIModelService._effective_writer_system_prompt(task)
         attachments = AIModelService._get_task_image_attachments(task)
@@ -914,7 +920,7 @@ class AIModelService:
             {"role": "user", "content": AIModelService._build_user_content_with_images(user_message, attachments)}
         ]
         return await AIModelService.call_openai_compatible_api_stream(
-            task.writer_model_config, messages, on_chunk,
+            task.writer_model_config, messages, on_chunk, on_reasoning_chunk,
             min_tokens=AIModelService.MIN_WRITER_MAX_TOKENS,
         )
     
@@ -992,7 +998,7 @@ class AIModelService:
             return f"评审过程中出现错误: {str(e)}\n\n建议：测试用例结构完整，可以使用。"
 
     @staticmethod
-    async def review_test_cases_stream(task: TestCaseGenerationTask, test_cases: str, on_chunk: Callable[[str], None]) -> str:
+    async def review_test_cases_stream(task: TestCaseGenerationTask, test_cases: str, on_chunk: Callable[[str], None], on_reasoning_chunk: Callable[[str], None] = None) -> str:
         """流式评审测试用例"""
         reviewer_prompt = task.reviewer_prompt_config.content
         focus = AIModelService._get_requirement_focus(task)
@@ -1008,7 +1014,7 @@ class AIModelService:
             {"role": "user", "content": user_message},
         ]
         return await AIModelService.call_openai_compatible_api_stream(
-            task.reviewer_model_config, messages, on_chunk,
+            task.reviewer_model_config, messages, on_chunk, on_reasoning_chunk,
             min_tokens=AIModelService.MIN_REVIEWER_MAX_TOKENS,
         )
 
@@ -1047,6 +1053,7 @@ class AIModelService:
         test_cases: str,
         review_feedback: str,
         on_chunk: Callable[[str], None],
+        on_reasoning_chunk: Callable[[str], None] = None,
     ) -> str:
         """流式生成最终版用例"""
         writer_prompt = AIModelService._effective_writer_system_prompt(task)
@@ -1070,7 +1077,7 @@ class AIModelService:
             {"role": "user", "content": AIModelService._build_user_content_with_images(user_message, attachments)},
         ]
         return await AIModelService.call_openai_compatible_api_stream(
-            task.writer_model_config, messages, on_chunk,
+            task.writer_model_config, messages, on_chunk, on_reasoning_chunk,
             min_tokens=AIModelService.MIN_WRITER_MAX_TOKENS,
         )
 
@@ -1128,6 +1135,7 @@ class AIModelService:
         existing_cases: str,
         refinement_instructions: str,
         on_chunk: Callable[[str], None],
+        on_reasoning_chunk: Callable[[str], None] = None,
     ) -> str:
         """在现有用例基础上按用户补充要求迭代修改（流式）。"""
         writer_prompt = AIModelService._effective_writer_system_prompt(task)
@@ -1140,7 +1148,7 @@ class AIModelService:
             {"role": "user", "content": AIModelService._build_user_content_with_images(user_message, attachments)},
         ]
         return await AIModelService.call_openai_compatible_api_stream(
-            task.writer_model_config, messages, on_chunk,
+            task.writer_model_config, messages, on_chunk, on_reasoning_chunk,
             min_tokens=AIModelService.MIN_WRITER_MAX_TOKENS,
         )
 

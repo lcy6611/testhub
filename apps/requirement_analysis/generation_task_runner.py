@@ -123,7 +123,12 @@ def run_generation_task(task_pk: int) -> None:
             def on_chunk_writer(ch: str):
                 _append_event({"type": "content", "content": ch})
 
-            generated = async_to_sync(AIModelService.generate_test_cases_stream)(t, on_chunk_writer)
+            def on_reasoning_writer(ch: str):
+                _append_event({"type": "reasoning", "phase": "generate", "content": ch})
+
+            generated = async_to_sync(AIModelService.generate_test_cases_stream)(
+                t, on_chunk_writer, on_reasoning_chunk=on_reasoning_writer
+            )
         else:
             generated = async_to_sync(AIModelService.generate_test_cases)(t)
         _record_ai_call_meta("generate")
@@ -157,8 +162,11 @@ def run_generation_task(task_pk: int) -> None:
                     def on_chunk_review(ch: str):
                         _append_event({"type": "review_content", "content": ch})
 
+                    def on_reasoning_review(ch: str):
+                        _append_event({"type": "reasoning", "phase": "review", "content": ch})
+
                     review = async_to_sync(AIModelService.review_test_cases_stream)(
-                        t, (generated or ""), on_chunk_review
+                        t, (generated or ""), on_chunk_review, on_reasoning_chunk=on_reasoning_review
                     )
                 else:
                     TestCaseGenerationTask.objects.filter(pk=task_pk).update(progress=70, status="reviewing")
@@ -186,9 +194,13 @@ def run_generation_task(task_pk: int) -> None:
                 def on_chunk_final(ch: str):
                     _append_event({"type": "final_content", "content": ch})
 
+                def on_reasoning_final(ch: str):
+                    _append_event({"type": "reasoning", "phase": "revise", "content": ch})
+
                 try:
                     final = async_to_sync(AIModelService.revise_test_cases_stream)(
-                        t, (generated or ""), (review or ""), on_chunk_final
+                        t, (generated or ""), (review or ""), on_chunk_final,
+                        on_reasoning_chunk=on_reasoning_final,
                     )
                     _record_ai_call_meta("revise")
                 except Exception as revise_exc:
@@ -382,8 +394,12 @@ def run_refinement_task(task_pk: int, refinement_instructions: str) -> None:
             def on_chunk(ch: str):
                 _append_event({"type": "content", "content": ch})
 
+            def on_reasoning_refine(ch: str):
+                _append_event({"type": "reasoning", "phase": "refine", "content": ch})
+
             refined = async_to_sync(AIModelService.continue_refine_test_cases_stream)(
-                t, existing, refinement_instructions, on_chunk
+                t, existing, refinement_instructions, on_chunk,
+                on_reasoning_chunk=on_reasoning_refine,
             )
         else:
             refined = async_to_sync(AIModelService.continue_refine_test_cases)(

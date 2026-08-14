@@ -842,6 +842,7 @@ class UiScheduledTask(models.Model):
     TASK_TYPE_CHOICES = [
         ('TEST_SUITE', '测试套件执行'),
         ('TEST_CASE', '测试用例执行'),
+        ('RECORD_SCRIPT', '录制脚本执行'),
     ]
 
     STATUS_CHOICES = [
@@ -877,6 +878,10 @@ class UiScheduledTask(models.Model):
                                    verbose_name='测试套件')
     test_cases = models.JSONField(default=list, blank=True, verbose_name='测试用例列表',
                                  help_text='测试用例ID列表，用于TEST_CASE类型任务')
+    # 录制脚本执行类型（RECORD_SCRIPT）关联的录制脚本（UiScriptGeneration.playwright_code）
+    record_script = models.ForeignKey(
+        'UiScriptGeneration', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='scheduled_tasks', verbose_name='录制脚本')
 
     # 执行配置
     engine = models.CharField(max_length=20, default='playwright', verbose_name='执行引擎',
@@ -1359,7 +1364,7 @@ class UiScriptGeneration(models.Model):
         ('partial', '部分通过'),
         ('failed', '失败'),
     ]
-    source_testcase_id = models.IntegerField(verbose_name='源用例ID(testcases.TestCase)')
+    source_testcase_id = models.IntegerField(null=True, blank=True, verbose_name='源用例ID(testcases.TestCase)，录制脚本可留空')
     source_testcase_title = models.CharField(max_length=500, blank=True, verbose_name='源用例标题')
     ui_project = models.ForeignKey(
         UiProject, on_delete=models.CASCADE,

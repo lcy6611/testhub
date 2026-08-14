@@ -233,3 +233,74 @@ class UiScriptGenerationViewSet(viewsets.ModelViewSet):
                 } if el else None,
             })
         return Response({'elements': data})
+
+    @action(detail=False, methods=['post'])
+    def generate_codegen_command(self, request):
+        """生成 Playwright codegen 录制命令（#329 录制回放）。
+
+        录制在用户本机运行（需能访问被测站点），命令复制到本机执行，
+        录制完成后把 .py 回传到平台 save_recorded 端点保存。
+        """
+        base_url = (request.data.get('base_url') or '').strip()
+        if not base_url:
+            return Response({'detail': '缺少 base_url'}, status=status.HTTP_400_BAD_REQUEST)
+        from .services.recorded_script_runner import build_codegen_command
+        cmd = build_codegen_command(base_url)
+        return Response({'base_url': base_url, 'command': cmd})
+
+    @action(detail=False, methods=['post'])
+    def save_recorded(self, request):
+        """保存用户回传的录制脚本（#329 录制回放）。
+
+        录制脚本本质是 playwright codegen 生成的 .py，存入 UiScriptGeneration.playwright_code。
+        可不关联源业务用例（source_testcase_id 已允许为空）。
+        """
+        from .models import UiProject
+        from apps.testcases.models import TestCase
+        base_url = (request.data.get('base_url') or '').strip()
+        code = request.data.get('playwright_code') or ''
+        name = (request.data.get('name') or '').strip() or '录制脚本'
+        if not code.strip():
+            return Response({'detail': '缺少 playwright_code'}, status=status.HTTP_400_BAD_REQUEST)
+        ui_project_id = request.data.get('ui_project_id')
+        proj = None
+        if ui_project_id:
+            try:
+                proj = UiProject.objects.get(id=ui_project_id)
+            except UiProject.DoesNotExist:
+                return Response({'detail': '目标 UI 项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+        src_id = request.data.get('source_testcase_id')
+        src_title = ''
+        if src_id:
+            try:
+                tc = TestCase.objects.get(id=src_id)
+                src_title = tc.title
+            except TestCase.DoesNotExist:
+                src_id = None
+        gen = UiScriptGeneration.objects.create(
+            source_testcase_id=src_id,
+            source_testcase_title=src_title or name,
+            ui_project=proj,
+            base_url=base_url or 'http://frontend:5173/',
+            status='pending',
+            playwright_code=code,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        return Response(self.get_serializer(gen).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def run_recorded(self, request, pk=None):
+        """回放执行录制脚本（#329 录制回放 / #328 定时任务执行录制脚本复用）。"""
+        gen = self.get_object()
+        from .services.recorded_script_runner import run_recorded_script
+        headless = request.data.get('headless', None)
+        if headless in (True, 'true', 'True', 1, '1'):
+            headless = True
+        elif headless in (False, 'false', 'False', 0, '0'):
+            headless = False
+        else:
+            headless = None
+        result = run_recorded_script(
+            gen, headless=headless, browser=request.data.get('browser', 'chromium')
+        )
+        return Response({'id': gen.id, 'status': result.get('status'), 'result': result})

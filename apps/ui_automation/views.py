@@ -2382,6 +2382,57 @@ class UiScheduledTaskViewSet(viewsets.ModelViewSet):
                     'headless': task.headless
                 }, status=status.HTTP_200_OK)
 
+            elif task.task_type == 'RECORD_SCRIPT':
+                # 执行录制脚本（Playwright codegen 回放）
+                if not task.record_script:
+                    return Response({
+                        'error': '该任务未配置录制脚本'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                from .services.recorded_script_runner import run_recorded_script
+                gen = task.record_script
+                effective_headless = _resolve_headless_for_env(task.headless)
+
+                import threading
+
+                def run_record():
+                    try:
+                        result = run_recorded_script(
+                            gen, headless=effective_headless, browser=task.browser
+                        )
+                        if result.get('status') == 'passed':
+                            task.successful_runs += 1
+                            task.last_result = {'status': 'success', 'message': '录制脚本执行成功'}
+                        else:
+                            task.failed_runs += 1
+                            task.last_result = {
+                                'status': 'failed',
+                                'message': result.get('error') or '录制脚本执行失败',
+                            }
+                        task.error_message = result.get('error', '')
+                        task.save()
+                        self._send_task_notification(task, success=result.get('status') == 'passed')
+                    except Exception as e:
+                        task.failed_runs += 1
+                        task.last_result = {'status': 'failed', 'message': str(e)}
+                        task.error_message = str(e)
+                        task.save()
+                        self._send_task_notification(task, success=False)
+
+                thread = threading.Thread(target=run_record)
+                thread.daemon = True
+                thread.start()
+
+                log_operation('run', 'scheduled_task', task.id, task.name, request.user)
+
+                return Response({
+                    'message': '录制脚本开始执行',
+                    'task_id': task.id,
+                    'task_name': task.name,
+                    'record_script': gen.id,
+                    'headless': effective_headless,
+                }, status=status.HTTP_200_OK)
+
             elif task.task_type == 'TEST_CASE':
                 # 执行测试用例
                 if not task.test_cases or len(task.test_cases) == 0:

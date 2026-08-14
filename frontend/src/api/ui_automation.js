@@ -1225,3 +1225,17 @@ export function getCaseScriptGenerationsByTestcase(testcaseId) {
 export function searchTestCases(params) {
   return request({ url: '/testcases/', method: 'get', params })
 }
+
+// ==================== 录制回放（#329） ====================
+// 生成 Playwright codegen 录制命令（复制到本机执行）
+export function generateCodegenCommand(data) {
+  return request({ url: '/ui-automation/case-script-generations/generate_codegen_command/', method: 'post', data })
+}
+// 保存本机回传的录制脚本（playwright_code 直接落库）
+export function saveRecordedScript(data) {
+  return request({ url: '/ui-automation/case-script-generations/save_recorded/', method: 'post', data })
+}
+// 回放执行已保存的录制脚本（detail=True action）
+export function runRecordedScript(id, data = {}) {
+  return request({ url: `/ui-automation/case-script-generations/${id}/run_recorded/`, method: 'post', data })
+}

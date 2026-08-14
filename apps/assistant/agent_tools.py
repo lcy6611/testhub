@@ -77,7 +77,56 @@ def _create_testcase(**kwargs) -> Dict[str, Any]:
         test_type=kwargs.get("test_type", "functional"),
         author=author,
     )
-    return {"id": tc.id, "title": tc.title, "project": project.name, "priority": tc.priority}
+
+    # 结构化保存操作步骤（对齐 TestCaseStep：step_number/action/expected）
+    # 7.0 #11 修复点：此前仅把 steps 当自由文本存入，未生成 step_details，
+    # 导致 get_testcase_detail 读不到结构化步骤。这里把多行 steps 解析为 TestCaseStep。
+    import re
+    from apps.testcases.models import TestCaseStep
+    steps_text = kwargs.get("steps", "") or ""
+    step_objs = []
+    step_number = 0
+    for raw in [l.strip() for l in steps_text.splitlines() if l.strip()]:
+        action = raw
+        expected = ""
+        # 去掉 "步骤N." / "N." / "N、" 等前缀
+        m = re.match(r"^(?:步骤)?\s*\d+[\.\、\)]\s*", action)
+        if m:
+            action = action[m.end():].strip()
+        # 纯预期行（以"预期/期望"开头）：并入上一步预期，不单独计为一步
+        if re.match(r"^(预期|期望)", action):
+            if step_objs:
+                step_objs[-1].expected = (step_objs[-1].expected + " " + action).strip()
+            continue
+        # 支持 "操作 预期：xxx" 或 "操作 || 预期xxx" 拆分出预期结果
+        if "预期" in action and (":" in action or "：" in action):
+            act_part, exp_part = action.split("预期", 1)
+            action = act_part.rstrip(" ：:-")
+            expected = "预期" + exp_part.lstrip(" ：:-")
+        elif "||" in action:
+            act_part, exp_part = action.split("||", 1)
+            action = act_part.strip()
+            expected = exp_part.strip()
+        if not action:
+            continue
+        step_number += 1
+        step_objs.append(TestCaseStep(
+            testcase=tc, step_number=step_number, action=action, expected=expected
+        ))
+    if step_objs:
+        TestCaseStep.objects.bulk_create(step_objs)
+
+    return {
+        "id": tc.id,
+        "title": tc.title,
+        "project": project.name,
+        "priority": tc.priority,
+        "steps_count": len(step_objs),
+        "step_details": [
+            {"step_number": s.step_number, "action": s.action, "expected": s.expected}
+            for s in step_objs
+        ],
+    }
 
 
 def _list_test_plans(**kwargs) -> Dict[str, Any]:

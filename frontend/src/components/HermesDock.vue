@@ -10,16 +10,31 @@
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
-    :title="dragging ? '拖动中…' : '点击唤起 Hermes · 拖动可移动位置'"
+    :title="dragging ? '拖动中…' : '点击打开 Hermes · 拖动可移动位置'"
   >
     <span class="hermes-dock__icon">🤖</span>
     <span v-if="!dragging && showHint" class="hermes-dock__hint">拖动我</span>
   </div>
+
+  <!-- 右侧抽屉：Hermes 聊天窗口 -->
+  <el-drawer
+    v-model="drawerVisible"
+    title="Hermes 助手"
+    direction="rtl"
+    size="460px"
+    :destroy-on-close="false"
+    class="hermes-dock__drawer">
+    <iframe
+      src="/hermes"
+      class="hermes-dock__iframe"
+      title="Hermes 助手">
+    </iframe>
+  </el-drawer>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 const STORAGE_KEY = 'hermes_dock_position'
 const SIZE = 56 // 图标直径(px)
@@ -27,7 +42,6 @@ const MARGIN = 16 // 距视口边缘最小间距(px)
 const DRAG_THRESHOLD = 4 // 超过该位移才算拖动(否则算点击)
 
 const route = useRoute()
-const router = useRouter()
 const dockRef = ref(null)
 
 // 位置(元素左上角相对视口)，null 表示尚未初始化(用默认右下角)
@@ -35,6 +49,7 @@ const pos = ref({ x: null, y: null })
 const dragging = ref(false)
 const moved = ref(false)
 const showHint = ref(true)
+const drawerVisible = ref(false)
 
 // 在登录页 / Hermes 自身页面隐藏(避免冗余)
 const visible = computed(() => {
@@ -125,8 +140,8 @@ function onPointerUp(e) {
     // 拖动结束 → 持久化位置
     savePosition()
   } else {
-    // 未拖动 → 视为点击，唤起 Hermes
-    router.push('/hermes')
+    // 未拖动 → 视为点击，右侧抽屉打开 Hermes
+    drawerVisible.value = true
   }
 }
 
@@ -193,5 +208,18 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.9);
   padding: 1px 6px;
   border-radius: 8px;
+}
+
+/* 抽屉内 Hermes iframe 铺满 */
+.hermes-dock__drawer :deep(.el-drawer__body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.hermes-dock__iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
 }
 </style>

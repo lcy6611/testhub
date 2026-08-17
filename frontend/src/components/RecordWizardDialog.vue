@@ -130,8 +130,17 @@
           >
             暂无 UI 项目，请先前往「UI 自动化 &rarr; 项目管理」创建一个项目后再保存。
           </el-alert>
-          <el-button type="primary" @click="importToEditor">导入到编辑器</el-button>
-          <el-button :loading="saveLoading" :disabled="!cfg.ui_project_id" @click="saveToPlatform">保存到平台</el-button>
+          <el-alert
+            v-else
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom:12px"
+          >
+            「保存为可回放脚本」后会进入脚本库，可在「录制回放」弹窗中选择执行。
+          </el-alert>
+          <el-button type="primary" @click="importToEditor">导入编辑器继续编辑</el-button>
+          <el-button :loading="saveLoading" :disabled="!cfg.ui_project_id" @click="saveToPlatform">保存为可回放脚本</el-button>
         </div>
       </div>
     </div>
@@ -274,7 +283,7 @@ async function saveToPlatform() {
       language: cfg.language,
       browser: cfg.browser,
     })
-    ElMessage.success(`已保存到平台：#${r.data.id}`)
+    ElMessage.success(`已保存为可回放脚本：#${r.data.id}，可在「录制回放」中选择`)
   } catch (e) {
     ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
   } finally {

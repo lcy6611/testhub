@@ -109,10 +109,10 @@
               <el-icon><Delete /></el-icon>
               清空
             </el-button>
-            <el-tooltip content="请先选择项目" :disabled="!!projectId">
+            <el-tooltip :content="projectId ? '保存到脚本库（用于测试套件执行）' : '请先选择项目'" :disabled="false">
               <el-button size="small" type="primary" :disabled="!projectId" @click="saveScript" :loading="saving">
                 <el-icon><Check /></el-icon>
-                保存脚本
+                保存到脚本库
               </el-button>
             </el-tooltip>
           </div>
@@ -505,8 +505,8 @@ const saveScript = async () => {
       framework: scriptFramework.value
     })
 
-    ElMessage.success(`脚本保存成功: ${scriptName}`)
-    addLog('success', `脚本已保存: ${scriptName}`)
+    ElMessage.success(`已保存到脚本库: ${scriptName}`)
+    addLog('success', `脚本已保存到脚本库: ${scriptName}`)
   } catch (error) {
     console.error('保存脚本失败:', error)
     ElMessage.error('脚本保存失败')

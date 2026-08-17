@@ -45,8 +45,16 @@
         </el-select>
       </el-form-item>
 
-      <el-form-item label="无头模式">
+      <el-form-item>
+        <template #label>
+          <span>无头模式</span>
+          <el-tooltip content="开启后浏览器在后端容器后台运行，不会弹出窗口；关闭后容器内通常没有显示器，会直接报错。" placement="top">
+            <el-icon style="margin-left:4px;vertical-align:middle;color:#909399"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </template>
         <el-switch v-model="form.headless" />
+        <span v-if="form.headless" style="margin-left:10px;color:#909399;font-size:12px">后台执行，只返回结果与日志</span>
+        <span v-else style="margin-left:10px;color:#e6a23c;font-size:12px">容器环境大概率无法显示浏览器窗口</span>
       </el-form-item>
 
       <el-form-item label="脚本代码">
@@ -85,6 +93,9 @@
     >
       <template #sub-title>
         <span>耗时 {{ runResult.result?.duration }}s · 退出码 {{ runResult.result?.exit_code }}</span>
+        <div style="color:#909399;font-size:12px;margin-top:6px">
+          回放无浏览器画面，仅验证脚本能否在服务器端跑通并输出日志。
+        </div>
       </template>
     </el-result>
 
@@ -110,7 +121,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Edit, WarningFilled } from '@element-plus/icons-vue'
+import { Refresh, Edit, WarningFilled, QuestionFilled } from '@element-plus/icons-vue'
 import { getCaseScriptGenerations, runRecordedScript } from '@/api/ui_automation'
 
 const props = defineProps({

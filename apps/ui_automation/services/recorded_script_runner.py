@@ -10,18 +10,66 @@
   - UiScriptGeneration 的「执行录制脚本」端点（#329）
   - UiScheduledTask 定时任务「录制脚本执行」类型（#328）
 """
+import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
+from django.conf import settings
 from django.utils import timezone
 
 
+VIDEO_SIZE = {"width": 1280, "height": 720}
+
+
+def _inject_video_options(code, video_dir):
+    """在 Python Playwright 脚本中注入录屏参数。
+
+    codegen 默认生成 `context = browser.new_context()`，我们通过替换/追加参数
+    让它把视频存到指定目录；录制结束后即可拿到 webm 回放文件。
+    """
+    marker = f"VIDEO_DIR = {video_dir!r}\n"
+    video_args = f"record_video_dir=VIDEO_DIR, record_video_size={VIDEO_SIZE!r}"
+    # 1) 最常见：无参 new_context()
+    if 'browser.new_context()' in code:
+        code = code.replace('browser.new_context()', f'browser.new_context({video_args})')
+    else:
+        # 2) 简单有参情况（单行、无嵌套括号）
+        def repl(m):
+            existing = m.group(1).strip()
+            return f'browser.new_context({video_args}, {existing})' if existing else f'browser.new_context({video_args})'
+        code = re.sub(r'browser\.new_context\(([^)]*)\)', repl, code)
+    return marker + code
+
+
+def _collect_video(video_dir, script_id=None):
+    """从 Playwright 录屏目录收集 webm 视频，移动到 MEDIA_ROOT/replay_videos/ 并返回 URL。"""
+    if not video_dir or not os.path.isdir(video_dir):
+        return None
+    webms = sorted([p for p in os.listdir(video_dir) if p.endswith('.webm')])
+    if not webms:
+        return None
+    video_path = os.path.join(video_dir, webms[0])
+
+    target_dir = os.path.join(settings.MEDIA_ROOT, 'replay_videos')
+    os.makedirs(target_dir, exist_ok=True)
+    ts = timezone.now().strftime('%Y%m%d_%H%M%S_%f')
+    fname = f"replay_{script_id or 'adhoc'}_{ts}.webm"
+    target = os.path.join(target_dir, fname)
+    shutil.move(video_path, target)
+    media_url = settings.MEDIA_URL
+    if not media_url.endswith('/'):
+        media_url += '/'
+    return f"{media_url}replay_videos/{fname}"
+
+
 def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
-                        language="python"):
+                        language="python", record_video=False, script_id=None):
     """直接执行一段 Playwright 代码（不依赖 ORM 实例），返回执行结果。
 
     Args:
@@ -30,19 +78,29 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
         browser: 仅作记录，codegen 脚本已自带浏览器选择
         timeout: 单脚本执行超时（秒）
         language: python | javascript（决定解释器与扩展名）
+        record_video: 是否在执行过程中录制浏览器视频（仅 Python Playwright）
+        script_id: 用于生成视频文件名前缀的脚本 ID
 
     Returns:
-        dict: {status, exit_code, output, duration}
+        dict: {status, exit_code, output, duration, video_url}
     """
     code = (code or "").strip()
     if not code:
-        return {"status": "failed", "error": "脚本为空，无法执行", "exit_code": None, "output": ""}
+        return {"status": "failed", "error": "脚本为空，无法执行", "exit_code": None, "output": "", "video_url": None}
 
     # 仅在脚本用无参 launch() 时注入 headless 设置，避免污染已显式指定参数的 launch
     if headless is True:
         code = code.replace("launch()", "launch(headless=True)")
     elif headless is False:
         code = code.replace("launch()", "launch(headless=False)")
+
+    video_dir = None
+    if record_video and language == "python":
+        try:
+            video_dir = tempfile.mkdtemp(prefix="pw_video_", dir="/tmp")
+            code = _inject_video_options(code, video_dir)
+        except Exception:  # noqa: BLE001
+            video_dir = None
 
     ext = "js" if language == "javascript" else "py"
     exe = "node" if ext == "js" else sys.executable
@@ -62,35 +120,45 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
         elapsed = round(time.time() - start, 2)
         ok = proc.returncode == 0
         output = (proc.stdout or "") + (proc.stderr or "")
+        video_url = _collect_video(video_dir, script_id=script_id) if video_dir else None
         return {
             "status": "passed" if ok else "failed",
             "exit_code": proc.returncode,
             "output": output[-4000:],
             "duration": elapsed,
+            "video_url": video_url,
         }
     except subprocess.TimeoutExpired:
-        return {"status": "failed", "error": "执行超时（>%ss）" % timeout, "exit_code": None, "output": ""}
+        return {"status": "failed", "error": "执行超时（>%ss）" % timeout, "exit_code": None, "output": "", "video_url": None}
     except Exception as e:  # noqa: BLE001
-        return {"status": "failed", "error": str(e), "exit_code": None, "output": ""}
+        return {"status": "failed", "error": str(e), "exit_code": None, "output": "", "video_url": None}
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
+        if video_dir:
+            try:
+                shutil.rmtree(video_dir, ignore_errors=True)
+            except OSError:
+                pass
 
 
 def run_recorded_script(script_generation, headless=None, browser="chromium", timeout=300,
-                        code_override=None):
+                        code_override=None, record_video=False):
     """执行一条 UiScriptGeneration 的录制脚本（playwright_code 字段）。
 
     兼容旧的录制任务链路；新链路推荐直接用 TestScript 的「执行」端点。
 
     Returns:
-        dict: {status, exit_code, output, duration}
+        dict: {status, exit_code, output, duration, video_url}
     """
     # 优先使用前端编辑后传入的代码（回放前可在弹窗里修正 locator），否则用库中保存的
     code = (code_override or getattr(script_generation, "playwright_code", "") or "").strip()
-    result = run_playwright_code(code, headless=headless, browser=browser, timeout=timeout)
+    result = run_playwright_code(
+        code, headless=headless, browser=browser, timeout=timeout,
+        record_video=record_video, script_id=getattr(script_generation, "id", None),
+    )
     _update_gen_status(script_generation, result.get("status"),
                        "" if result.get("status") == "passed" else (result.get("error") or "")[:1000])
     return result

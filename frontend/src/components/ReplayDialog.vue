@@ -57,6 +57,17 @@
         <span v-else style="margin-left:10px;color:#e6a23c;font-size:12px">容器环境大概率无法显示浏览器窗口</span>
       </el-form-item>
 
+      <el-form-item>
+        <template #label>
+          <span>录制回放视频</span>
+          <el-tooltip content="执行时同步录制浏览器操作视频，执行完成后可回放观看。" placement="top">
+            <el-icon style="margin-left:4px;vertical-align:middle;color:#909399"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </template>
+        <el-switch v-model="form.recordVideo" />
+        <span style="margin-left:10px;color:#909399;font-size:12px">推荐开启，执行完即可回看</span>
+      </el-form-item>
+
       <el-form-item label="脚本代码">
         <div style="width:100%">
           <el-button size="small" :icon="Edit" @click="showCode = !showCode">
@@ -94,10 +105,23 @@
       <template #sub-title>
         <span>耗时 {{ runResult.result?.duration }}s · 退出码 {{ runResult.result?.exit_code }}</span>
         <div style="color:#909399;font-size:12px;margin-top:6px">
-          回放无浏览器画面，仅验证脚本能否在服务器端跑通并输出日志。
+          {{ runResult.result?.video_url ? '已生成回放视频，下方可直接观看。' : '未录制视频或录制失败，仅返回结果与日志。' }}
         </div>
       </template>
     </el-result>
+
+    <!-- 回放视频 -->
+    <div v-if="runResult?.result?.video_url" class="replay-video">
+      <div class="video-title">回放视频</div>
+      <video
+        controls
+        preload="metadata"
+        :src="runResult.result.video_url"
+        style="width:100%;max-height:360px;background:#000;border-radius:6px"
+      >
+        您的浏览器不支持视频播放。
+      </video>
+    </div>
 
     <!-- 失败友好步骤提示 -->
     <div v-if="runResult && runResult.status !== 'passed' && failureHint" class="failure-hint">
@@ -142,6 +166,7 @@ const form = reactive({
   scriptId: '',
   browser: 'chromium',
   headless: true,
+  recordVideo: true,
 })
 
 async function loadScripts() {
@@ -176,6 +201,7 @@ async function onRun() {
     const r = await runTestScript(form.scriptId, {
       headless: form.headless,
       browser: form.browser,
+      record_video: form.recordVideo,
       // 把编辑后的代码一并传回，优先于库中保存的（用于修正 locator）
       playwright_code: showCode.value ? editableCode.value : undefined,
     })
@@ -292,5 +318,17 @@ watch(() => props.modelValue, (v) => {
   color: #606266;
   font-size: 13px;
   line-height: 1.7;
+}
+.replay-video {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+.replay-video .video-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 8px;
 }
 </style>

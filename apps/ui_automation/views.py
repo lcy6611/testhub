@@ -651,24 +651,28 @@ class TestScriptViewSet(viewsets.ModelViewSet):
 
         与录制脚本回放共用底层执行器；脚本库存的是统一数据源，
         录制向导 / 编辑器保存的脚本都在这里，因此回放列表直接读脚本库。
+
+        支持 record_video 参数：执行时录制浏览器视频，结束后返回 video_url。
+        容器/无图形环境下自动降级为无头模式，仍可正常录屏。
         """
         script = self.get_object()
         from .services.recorded_script_runner import run_playwright_code
-        headless = request.data.get('headless', None)
-        if headless in (True, 'true', 'True', 1, '1'):
-            headless = True
-        elif headless in (False, 'false', 'False', 0, '0'):
-            headless = False
-        else:
-            headless = None
+        headless = _resolve_headless_for_env(request.data.get('headless', False))
         code = (request.data.get('playwright_code') or script.content or '').strip()
         if not code:
             return Response({'id': script.id, 'status': 'failed',
-                             'result': {'status': 'failed', 'error': '脚本内容为空', 'output': ''}})
+                             'result': {'status': 'failed', 'error': '脚本内容为空', 'output': '', 'video_url': None}})
+        record_video = _to_bool(request.data.get('record_video', True), default=True)
         result = run_playwright_code(
             code, headless=headless, browser=request.data.get('browser', 'chromium'),
             language=script.language or 'python',
+            record_video=record_video,
+            script_id=script.id,
         )
+        # 持久化最近回放视频地址，方便列表/详情页也能回放观看
+        if result.get('video_url'):
+            script.last_execution_video_url = result['video_url']
+            script.save(update_fields=['last_execution_video_url', 'updated_at'])
         return Response({'id': script.id, 'status': result.get('status'), 'result': result})
 
 

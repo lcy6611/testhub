@@ -214,6 +214,11 @@ class TestScript(models.Model):
                   '{"type":"page_contains","text":"创建成功"}]'
     )
 
+    last_execution_video_url = models.CharField(
+        max_length=500, blank=True, verbose_name='最近回放视频地址',
+        help_text='最近一次执行成功录制的回放视频相对/绝对 URL（由执行器写入）'
+    )
+
     # ===== 资产复用治理：克隆溯源 =====
     cloned_from = models.PositiveIntegerField(null=True, blank=True, verbose_name='克隆来源ID')
     cloned_at = models.DateTimeField(null=True, blank=True, verbose_name='克隆时间')

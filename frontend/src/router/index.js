@@ -344,11 +344,6 @@ const routes = [
         path: 'generate-result/:id',
         name: 'UiGenerateResult',
         component: () => import('@/views/ui-automation/CaseScriptResult.vue')
-      },
-      {
-        path: 'recorder',
-        name: 'UiRecorder',
-        component: () => import('@/views/ui-automation/RecorderView.vue')
       }
     ]
   },

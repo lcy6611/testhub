@@ -13,7 +13,7 @@
           <el-select
             v-model="form.scriptId"
             filterable
-            placeholder="选择已保存的录制脚本"
+            placeholder="选择脚本库中的脚本"
             style="flex:1"
             :loading="listLoading"
             @change="onSelect"
@@ -21,14 +21,14 @@
             <el-option
               v-for="s in scripts"
               :key="s.id"
-              :label="`#${s.id} ${s.source_testcase_title || s.name || '录制脚本'}`"
+              :label="`#${s.id} ${s.name || '脚本'}`"
               :value="s.id"
             />
           </el-select>
           <el-button :icon="Refresh" :loading="listLoading" @click="loadScripts">刷新</el-button>
         </div>
         <div v-if="!listLoading && scripts.length === 0" style="color:#e6a23c;font-size:12px;margin-top:4px">
-          暂无已保存的录制脚本，请先通过「开始录制」向导保存。
+          脚本库暂无 Playwright 脚本，请先通过「开始录制」向导或编辑器保存。
         </div>
       </el-form-item>
 
@@ -122,7 +122,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Edit, WarningFilled, QuestionFilled } from '@element-plus/icons-vue'
-import { getCaseScriptGenerations, runRecordedScript } from '@/api/ui_automation'
+import { getTestScripts, runTestScript } from '@/api/ui_automation'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -147,11 +147,12 @@ const form = reactive({
 async function loadScripts() {
   listLoading.value = true
   try {
-    const r = await getCaseScriptGenerations({ page_size: 200 })
+    const r = await getTestScripts({ page_size: 200, framework: 'playwright' })
     const items = r.data.results || r.data || []
-    scripts.value = items.filter(s => (s.playwright_code || '').trim())
+    // 脚本库即统一数据源：录制向导 / 编辑器保存的脚本都在这里
+    scripts.value = items.filter(s => s.framework === 'playwright' && (s.content || '').trim())
   } catch (e) {
-    ElMessage.error('加载录制脚本列表失败')
+    ElMessage.error('加载脚本列表失败')
   } finally {
     listLoading.value = false
   }
@@ -159,8 +160,10 @@ async function loadScripts() {
 
 function onSelect(id) {
   const s = scripts.value.find(x => x.id === id)
-  selectedBaseUrl.value = s?.base_url || ''
-  editableCode.value = s?.playwright_code || ''
+  // 从脚本中取首个 goto/start_with 的 URL 作为可读 Base URL
+  const m = (s?.content || '').match(/url\s*=\s*["']([^"']+)["']|goto\(\s*["']([^"']+)["']/)
+  selectedBaseUrl.value = (m && (m[1] || m[2])) || ''
+  editableCode.value = s?.content || ''
   showCode.value = false
   runResult.value = null
   failureHint.value = null
@@ -170,7 +173,7 @@ async function onRun() {
   if (!form.scriptId) return
   runLoading.value = true
   try {
-    const r = await runRecordedScript(form.scriptId, {
+    const r = await runTestScript(form.scriptId, {
       headless: form.headless,
       browser: form.browser,
       // 把编辑后的代码一并传回，优先于库中保存的（用于修正 locator）

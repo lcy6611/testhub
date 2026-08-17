@@ -109,10 +109,10 @@
               <el-icon><Delete /></el-icon>
               清空
             </el-button>
-            <el-tooltip :content="projectId ? '保存到脚本库（用于测试套件执行）' : '请先选择项目'" :disabled="false">
+            <el-tooltip content="保存到脚本库（统一存储，脚本库与录制回放通用）" :disabled="!projectId">
               <el-button size="small" type="primary" :disabled="!projectId" @click="saveScript" :loading="saving">
                 <el-icon><Check /></el-icon>
-                保存到脚本库
+                保存
               </el-button>
             </el-tooltip>
           </div>

@@ -137,10 +137,9 @@
             show-icon
             style="margin-bottom:12px"
           >
-            「保存为可回放脚本」后会进入脚本库，可在「录制回放」弹窗中选择执行。
+            保存后脚本进入统一的脚本库，可在「录制回放」或脚本库中查看与执行。
           </el-alert>
-          <el-button type="primary" @click="importToEditor">导入编辑器继续编辑</el-button>
-          <el-button :loading="saveLoading" :disabled="!cfg.ui_project_id" @click="saveToPlatform">保存为可回放脚本</el-button>
+          <el-button type="primary" :loading="saveLoading" :disabled="!cfg.ui_project_id" @click="saveScript">保存到脚本库</el-button>
         </div>
       </div>
     </div>
@@ -159,7 +158,7 @@ import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Refresh } from '@element-plus/icons-vue'
 import {
-  generateCodegenCommand, saveRecordedScript, getUiProjects,
+  generateCodegenCommand, createTestScript, getUiProjects,
 } from '@/api/ui_automation'
 
 const props = defineProps({
@@ -254,17 +253,7 @@ function onFileChange(file) {
   reader.readAsText(raw)
 }
 
-function importToEditor() {
-  emit('imported', {
-    code: importedCode.value,
-    name: cfg.name,
-    language: cfg.language,
-  })
-  ElMessage.success('已导入到编辑器')
-  emit('update:modelValue', false)
-}
-
-async function saveToPlatform() {
+async function saveScript() {
   if (!importedCode.value.trim()) {
     ElMessage.warning('请先选择录制文件')
     return
@@ -275,15 +264,16 @@ async function saveToPlatform() {
   }
   saveLoading.value = true
   try {
-    const r = await saveRecordedScript({
-      base_url: cfg.base_url,
-      playwright_code: importedCode.value,
-      name: cfg.name || undefined,
-      ui_project_id: cfg.ui_project_id || undefined,
+    const r = await createTestScript({
+      project: cfg.ui_project_id,
+      name: cfg.name || '录制脚本',
+      description: '通过录制向导保存的 Playwright 脚本',
+      script_type: 'CODE',
+      content: importedCode.value,
       language: cfg.language,
-      browser: cfg.browser,
+      framework: 'playwright',
     })
-    ElMessage.success(`已保存为可回放脚本：#${r.data.id}，可在「录制回放」中选择`)
+    ElMessage.success(`已保存到脚本库：#${r.data.id}，可在「录制回放」中选择执行`)
   } catch (e) {
     ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
   } finally {

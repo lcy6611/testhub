@@ -645,6 +645,32 @@ class TestScriptViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return TestScript.objects.all()
 
+    @action(detail=True, methods=['post'])
+    def run(self, request, pk=None):
+        """回放执行脚本库中的脚本（直接以 Playwright 代码运行）。
+
+        与录制脚本回放共用底层执行器；脚本库存的是统一数据源，
+        录制向导 / 编辑器保存的脚本都在这里，因此回放列表直接读脚本库。
+        """
+        script = self.get_object()
+        from .services.recorded_script_runner import run_playwright_code
+        headless = request.data.get('headless', None)
+        if headless in (True, 'true', 'True', 1, '1'):
+            headless = True
+        elif headless in (False, 'false', 'False', 0, '0'):
+            headless = False
+        else:
+            headless = None
+        code = (request.data.get('playwright_code') or script.content or '').strip()
+        if not code:
+            return Response({'id': script.id, 'status': 'failed',
+                             'result': {'status': 'failed', 'error': '脚本内容为空', 'output': ''}})
+        result = run_playwright_code(
+            code, headless=headless, browser=request.data.get('browser', 'chromium'),
+            language=script.language or 'python',
+        )
+        return Response({'id': script.id, 'status': result.get('status'), 'result': result})
+
 
 class TestSuiteViewSet(viewsets.ModelViewSet):
     queryset = TestSuite.objects.all()

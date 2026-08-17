@@ -163,6 +163,16 @@ export function deleteTestScript(id) {
   })
 }
 
+// 回放执行脚本库中的脚本（统一回放入口）
+export function runTestScript(id, data = {}) {
+  return request({
+    url: `/ui-automation/test-scripts/${id}/run/`,
+    method: 'post',
+    data,
+    timeout: 300000,
+  })
+}
+
 // 测试套件相关API
 
 // 获取测试套件列表

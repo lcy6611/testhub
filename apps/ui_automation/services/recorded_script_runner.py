@@ -103,7 +103,7 @@ def build_codegen_command(base_url, output_file=None, language="python",
         save_login: True 时附加 --save-storage，浏览器登录态录制时保存
     """
     if not output_file:
-        safe = re.sub(r"[^0-9A-Za-z]", "_", base_url or "site")[:40]
+        safe = re.sub(r"[^0-9A-Za-z]", "_", base_url or "site")[:40].rstrip("_")
         output_file = "recorded_%s.py" % safe
     target = "python" if language != "javascript" else "javascript"
     ext = "py" if target == "python" else "js"

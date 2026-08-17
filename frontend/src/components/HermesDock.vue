@@ -21,20 +21,17 @@
     v-model="drawerVisible"
     title="Hermes 助手"
     direction="rtl"
-    size="460px"
+    size="420px"
     :destroy-on-close="false"
     class="hermes-dock__drawer">
-    <iframe
-      src="/hermes"
-      class="hermes-dock__iframe"
-      title="Hermes 助手">
-    </iframe>
+    <HermesChatPanel compact />
   </el-drawer>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
+import HermesChatPanel from './HermesChatPanel.vue'
 
 const STORAGE_KEY = 'hermes_dock_position'
 const SIZE = 56 // 图标直径(px)
@@ -210,16 +207,13 @@ onBeforeUnmount(() => {
   border-radius: 8px;
 }
 
-/* 抽屉内 Hermes iframe 铺满 */
+/* 抽屉内 Hermes 聊天面板铺满 */
 .hermes-dock__drawer :deep(.el-drawer__body) {
   padding: 0;
   height: 100%;
   overflow: hidden;
 }
-.hermes-dock__iframe {
-  width: 100%;
+.hermes-dock__drawer :deep(.el-drawer__body > .chat-panel) {
   height: 100%;
-  border: none;
-  display: block;
 }
 </style>

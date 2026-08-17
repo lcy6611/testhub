@@ -102,9 +102,36 @@
             <el-form-item label="脚本名称">
               <el-input v-model="cfg.name" style="width:260px" />
             </el-form-item>
+            <el-form-item label="所属项目">
+              <div style="display:flex;gap:6px">
+                <el-select
+                  v-model="cfg.ui_project_id"
+                  placeholder="选择 UI 项目"
+                  style="width:220px"
+                  :loading="projectsLoading"
+                >
+                  <el-option
+                    v-for="p in projects"
+                    :key="p.id"
+                    :label="p.name"
+                    :value="p.id"
+                  />
+                </el-select>
+                <el-button :icon="Refresh" :loading="projectsLoading" circle size="small" title="刷新项目列表" @click="loadProjects" />
+              </div>
+            </el-form-item>
           </el-form>
+          <el-alert
+            v-if="!projectsLoading && projects.length === 0"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom:12px"
+          >
+            暂无 UI 项目，请先前往「UI 自动化 &rarr; 项目管理」创建一个项目后再保存。
+          </el-alert>
           <el-button type="primary" @click="importToEditor">导入到编辑器</el-button>
-          <el-button :loading="saveLoading" @click="saveToPlatform">保存到平台</el-button>
+          <el-button :loading="saveLoading" :disabled="!cfg.ui_project_id" @click="saveToPlatform">保存到平台</el-button>
         </div>
       </div>
     </div>
@@ -119,9 +146,9 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { UploadFilled, Refresh } from '@element-plus/icons-vue'
 import {
   generateCodegenCommand, saveRecordedScript, getUiProjects,
 } from '@/api/ui_automation'
@@ -138,6 +165,7 @@ const saveLoading = ref(false)
 const command = ref('')
 const importedCode = ref('')
 const projects = ref([])
+const projectsLoading = ref(false)
 
 const cfg = reactive({
   base_url: 'http://frontend:5173/',
@@ -146,16 +174,25 @@ const cfg = reactive({
   browser: 'chromium',
   device: '',
   save_login: false,
-  ui_project_id: '',
+  ui_project_id: props.projectId || '',
 })
 
 const previewCode = ref('')
 
 async function loadProjects() {
+  projectsLoading.value = true
   try {
     const r = await getUiProjects({ page_size: 200 })
-    projects.value = r.data.results || r.data || []
-  } catch (e) { /* ignore */ }
+    const list = r.data.results || r.data || []
+    projects.value = list
+    if (!cfg.ui_project_id && list.length > 0) {
+      cfg.ui_project_id = list[0].id
+    }
+  } catch (e) {
+    ElMessage.error('加载项目列表失败：' + (e.response?.data?.detail || e.message))
+  } finally {
+    projectsLoading.value = false
+  }
 }
 
 async function onGenerate() {
@@ -223,13 +260,17 @@ async function saveToPlatform() {
     ElMessage.warning('请先选择录制文件')
     return
   }
+  if (!cfg.ui_project_id) {
+    ElMessage.warning(projects.value.length === 0 ? '暂无可用项目，请先创建 UI 项目' : '请选择所属项目')
+    return
+  }
   saveLoading.value = true
   try {
     const r = await saveRecordedScript({
       base_url: cfg.base_url,
       playwright_code: importedCode.value,
       name: cfg.name || undefined,
-      ui_project_id: props.projectId || undefined,
+      ui_project_id: cfg.ui_project_id || undefined,
       language: cfg.language,
       browser: cfg.browser,
     })
@@ -253,9 +294,16 @@ function onClosed() {
   cfg.name = ''
   cfg.device = ''
   cfg.save_login = false
+  cfg.ui_project_id = props.projectId || ''
 }
 
 loadProjects()
+
+watch(() => props.projectId, (v) => {
+  if (v && !cfg.ui_project_id) {
+    cfg.ui_project_id = v
+  }
+})
 </script>
 
 <style scoped>

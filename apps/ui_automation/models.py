@@ -1367,7 +1367,7 @@ class UiScriptGeneration(models.Model):
     source_testcase_id = models.IntegerField(null=True, blank=True, verbose_name='源用例ID(testcases.TestCase)，录制脚本可留空')
     source_testcase_title = models.CharField(max_length=500, blank=True, verbose_name='源用例标题')
     ui_project = models.ForeignKey(
-        UiProject, on_delete=models.CASCADE,
+        UiProject, on_delete=models.CASCADE, null=True, blank=True,
         related_name='script_generations', verbose_name='目标UI项目'
     )
     base_url = models.CharField(max_length=500, verbose_name='被测系统地址')

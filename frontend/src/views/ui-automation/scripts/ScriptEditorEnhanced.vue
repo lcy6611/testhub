@@ -3,9 +3,32 @@
     <div class="page-header">
       <h1 class="page-title">智能脚本生成</h1>
       <div class="header-actions">
-        <el-select v-model="projectId" placeholder="选择项目" style="width: 200px; margin-right: 15px" @change="onProjectChange">
-          <el-option v-for="project in projects" :key="project.id" :label="project.name" :value="project.id" />
+        <el-select
+          v-model="projectId"
+          placeholder="选择项目"
+          style="width: 200px; margin-right: 8px"
+          :loading="projectsLoading"
+          @change="onProjectChange"
+        >
+          <el-option
+            v-for="project in projects"
+            :key="project.id"
+            :label="project.name"
+            :value="project.id"
+          />
         </el-select>
+        <el-button :icon="Refresh" :loading="projectsLoading" circle size="small" title="刷新项目列表" @click="loadProjects" />
+        <el-alert
+          v-if="!projectsLoading && projects.length === 0"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-left: 12px; padding: 4px 8px; width: auto"
+        >
+          <template #default>
+            暂无 UI 项目，<el-button link type="primary" @click="$router.push('/ui-automation/projects')">去创建</el-button>
+          </template>
+        </el-alert>
       </div>
     </div>
 
@@ -86,10 +109,12 @@
               <el-icon><Delete /></el-icon>
               清空
             </el-button>
-            <el-button size="small" type="primary" @click="saveScript" :loading="saving">
-              <el-icon><Check /></el-icon>
-              保存脚本
-            </el-button>
+            <el-tooltip content="请先选择项目" :disabled="!!projectId">
+              <el-button size="small" type="primary" :disabled="!projectId" @click="saveScript" :loading="saving">
+                <el-icon><Check /></el-icon>
+                保存脚本
+              </el-button>
+            </el-tooltip>
           </div>
         </div>
 
@@ -187,7 +212,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Plus, View, Document, Check, Delete, Operation, Folder, VideoCamera, Upload
+  Search, Plus, View, Document, Check, Delete, Operation, Folder, VideoCamera, Upload, Refresh, Warning
 } from '@element-plus/icons-vue'
 
 import RecordWizardDialog from '@/components/RecordWizardDialog.vue'
@@ -203,6 +228,7 @@ import {
 
 // 响应式数据
 const projects = ref([])
+const projectsLoading = ref(false)
 const projectId = ref('')
 const scriptContent = ref('')
 const scriptLanguage = ref('python')
@@ -235,12 +261,22 @@ const codeEditor = ref(null)
 
 // 方法定义
 const loadProjects = async () => {
+  projectsLoading.value = true
   try {
     const response = await getUiProjects({ page_size: 100 })
-    projects.value = response.data.results || response.data
+    const list = response.data.results || response.data || []
+    projects.value = list
+    // 如果当前未选项目且列表非空，默认选中第一个并加载元素树（不清空编辑器内容）
+    if (!projectId.value && list.length > 0) {
+      projectId.value = list[0].id
+      await loadElementTree()
+    }
   } catch (error) {
-    ElMessage.error('获取项目列表失败')
+    const detail = error.response?.data?.detail || error.message
+    ElMessage.error('获取项目列表失败：' + detail)
     console.error('获取项目列表失败:', error)
+  } finally {
+    projectsLoading.value = false
   }
 }
 
@@ -446,7 +482,7 @@ const generateScriptName = () => {
 
 const saveScript = async () => {
   if (!projectId.value) {
-    ElMessage.warning('请先选择项目')
+    ElMessage.warning(projects.value.length === 0 ? '暂无可用项目，请先创建 UI 项目' : '请先选择项目')
     return
   }
 
@@ -580,11 +616,6 @@ watch(scriptLanguage, (newLang) => {
 // 组件挂载
 onMounted(async () => {
   await loadProjects()
-
-  if (projects.value.length > 0) {
-    projectId.value = projects.value[0].id
-    await onProjectChange()
-  }
 
   // 为textarea添加事件监听
   if (codeEditor.value) {

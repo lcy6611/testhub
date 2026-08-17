@@ -313,6 +313,7 @@ class UiScriptGenerationViewSet(viewsets.ModelViewSet):
         else:
             headless = None
         result = run_recorded_script(
-            gen, headless=headless, browser=request.data.get('browser', 'chromium')
+            gen, headless=headless, browser=request.data.get('browser', 'chromium'),
+            code_override=request.data.get('playwright_code') or None,
         )
         return Response({'id': gen.id, 'status': result.get('status'), 'result': result})

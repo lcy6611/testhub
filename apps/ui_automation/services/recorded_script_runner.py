@@ -19,7 +19,8 @@ import time
 from django.utils import timezone
 
 
-def run_recorded_script(script_generation, headless=None, browser="chromium", timeout=300):
+def run_recorded_script(script_generation, headless=None, browser="chromium", timeout=300,
+                         code_override=None):
     """执行一条 UiScriptGeneration 的录制脚本（playwright_code 字段）。
 
     Args:
@@ -27,11 +28,13 @@ def run_recorded_script(script_generation, headless=None, browser="chromium", ti
         headless: None=沿用脚本原设置；True/False=把无参 launch() 改为对应 headless
         browser: 仅作记录，codegen 脚本已自带浏览器选择
         timeout: 单脚本执行超时（秒）
+        code_override: 前端编辑后的代码，优先于库中保存的代码（回放前手动修正 locator）
 
     Returns:
         dict: {status, exit_code, output, duration}
     """
-    code = (getattr(script_generation, "playwright_code", "") or "").strip()
+    # 优先使用前端编辑后传入的代码（回放前可在弹窗里修正 locator），否则用库中保存的
+    code = (code_override or getattr(script_generation, "playwright_code", "") or "").strip()
     if not code:
         return {"status": "failed", "error": "录制脚本为空，无法执行", "exit_code": None, "output": ""}
 

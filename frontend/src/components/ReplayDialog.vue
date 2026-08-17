@@ -53,6 +53,9 @@
         <el-button type="warning" :loading="runLoading" :disabled="!form.scriptId" @click="onRun">
           执行回放
         </el-button>
+        <span v-if="runLoading" style="margin-left:10px;color:#606266;font-size:12px">
+          执行中，可能需要几十秒，请等待…
+        </span>
       </el-form-item>
     </el-form>
 

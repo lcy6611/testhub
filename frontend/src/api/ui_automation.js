@@ -1236,6 +1236,12 @@ export function saveRecordedScript(data) {
   return request({ url: '/ui-automation/case-script-generations/save_recorded/', method: 'post', data })
 }
 // 回放执行已保存的录制脚本（detail=True action）
+// 启动浏览器+执行脚本耗时较长，放大超时到 300s 避免误超时
 export function runRecordedScript(id, data = {}) {
-  return request({ url: `/ui-automation/case-script-generations/${id}/run_recorded/`, method: 'post', data })
+  return request({
+    url: `/ui-automation/case-script-generations/${id}/run_recorded/`,
+    method: 'post',
+    data,
+    timeout: 300000,
+  })
 }

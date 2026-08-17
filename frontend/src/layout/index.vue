@@ -173,10 +173,6 @@
               <el-icon><DocumentCopy /></el-icon>
               <span>生成记录</span>
             </el-menu-item>
-            <el-menu-item index="/ui-automation/recorder">
-              <el-icon><VideoCamera /></el-icon>
-              <span>录制回放</span>
-            </el-menu-item>
           </template>
 
           <!-- APP 自动化测试模块菜单 -->
@@ -628,7 +624,6 @@ const breadcrumbTitle = computed(() => {
     '/ui-automation/ai-generate': 'AI 生成',
     '/ui-automation/generate-from-case': '用例生成UI脚本',
     '/ui-automation/generate-records': '生成记录',
-    '/ui-automation/recorder': '录制回放',
     '/ui-automation/notification-logs': '通知列表',
 
     // APP自动化测试

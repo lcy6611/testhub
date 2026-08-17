@@ -88,16 +88,33 @@ def _update_gen_status(gen, status, error):
         pass
 
 
-def build_codegen_command(base_url, output_file=None):
+def build_codegen_command(base_url, output_file=None, language="python",
+                           browser="chromium", device=None, save_login=False):
     """生成 playwright codegen 录制命令，供前端展示让用户复制到本机执行。
 
     codegen 在用户本机运行（需能访问被测站点），录制完成回传 .py 到平台保存。
+
+    Args:
+        base_url: 被测系统地址
+        output_file: 输出文件名（默认按 base_url 生成）
+        language: python | javascript（决定 --target 与扩展名）
+        browser: chromium | chrome | firefox | webkit
+        device: 视口模拟，形如 "1280,720"；为空则不模拟
+        save_login: True 时附加 --save-storage，浏览器登录态录制时保存
     """
     if not output_file:
         safe = re.sub(r"[^0-9A-Za-z]", "_", base_url or "site")[:40]
         output_file = "recorded_%s.py" % safe
-    # --target python 生成 Python；-o 指定输出文件；--browser chromium 默认 chromium
-    return (
-        'playwright codegen --target python --browser chromium '
-        '-o %s "%s"' % (output_file, base_url)
-    )
+    target = "python" if language != "javascript" else "javascript"
+    ext = "py" if target == "python" else "js"
+    if not output_file.endswith("." + ext):
+        output_file = re.sub(r"\.(py|js)$", "", output_file) + "." + ext
+
+    parts = ["playwright codegen", "--target %s" % target, "--browser %s" % browser]
+    if device:
+        parts.append('--viewport-size "%s"' % device)
+    if save_login:
+        parts.append("--save-storage auth.json")
+    parts.append("-o %s" % output_file)
+    parts.append('"%s"' % base_url)
+    return " ".join(parts)

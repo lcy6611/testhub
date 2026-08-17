@@ -240,13 +240,25 @@ class UiScriptGenerationViewSet(viewsets.ModelViewSet):
 
         录制在用户本机运行（需能访问被测站点），命令复制到本机执行，
         录制完成后把 .py 回传到平台 save_recorded 端点保存。
+        支持 language / browser / device(视口) / save_login(保存登录态) 透传。
         """
         base_url = (request.data.get('base_url') or '').strip()
         if not base_url:
             return Response({'detail': '缺少 base_url'}, status=status.HTTP_400_BAD_REQUEST)
         from .services.recorded_script_runner import build_codegen_command
-        cmd = build_codegen_command(base_url)
-        return Response({'base_url': base_url, 'command': cmd})
+        cmd = build_codegen_command(
+            base_url,
+            language=request.data.get('language', 'python'),
+            browser=request.data.get('browser', 'chromium'),
+            device=request.data.get('device') or None,
+            save_login=bool(request.data.get('save_login', False)),
+        )
+        return Response({
+            'base_url': base_url,
+            'command': cmd,
+            'language': request.data.get('language', 'python'),
+            'browser': request.data.get('browser', 'chromium'),
+        })
 
     @action(detail=False, methods=['post'])
     def save_recorded(self, request):

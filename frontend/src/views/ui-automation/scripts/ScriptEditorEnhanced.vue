@@ -70,6 +70,14 @@
             </el-select>
           </div>
           <div class="toolbar-right">
+            <el-button size="small" @click="showRecordWizard = true">
+              <el-icon><VideoCamera /></el-icon>
+              开始录制
+            </el-button>
+            <el-button size="small" @click="showReplay = true">
+              <el-icon><Upload /></el-icon>
+              录制回放
+            </el-button>
             <el-button size="small" @click="formatCode">
               <el-icon><Operation /></el-icon>
               格式化
@@ -168,6 +176,10 @@
         </el-tabs>
       </div>
     </div>
+
+    <!-- 录制向导 / 回放弹窗（对齐参考视频：在脚本编辑器内触发） -->
+    <RecordWizardDialog v-model="showRecordWizard" :project-id="projectId" @imported="onScriptImported" />
+    <ReplayDialog v-model="showReplay" />
   </div>
 </template>
 
@@ -175,8 +187,11 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Plus, View, Document, Check, Delete, Operation, Folder
+  Search, Plus, View, Document, Check, Delete, Operation, Folder, VideoCamera, Upload
 } from '@element-plus/icons-vue'
+
+import RecordWizardDialog from '@/components/RecordWizardDialog.vue'
+import ReplayDialog from '@/components/ReplayDialog.vue'
 
 import {
   getUiProjects,
@@ -203,6 +218,17 @@ const saving = ref(false)
 
 // 标签页控制
 const rightActiveTab = ref('logs')
+
+// 录制向导 / 回放弹窗显隐
+const showRecordWizard = ref(false)
+const showReplay = ref(false)
+
+// 录制向导导入的脚本填入编辑器
+const onScriptImported = (payload) => {
+  scriptContent.value = payload.code
+  if (payload.language) scriptLanguage.value = payload.language
+  addLog('info', `已从录制导入脚本：${payload.name || '未命名'}`)
+}
 
 // Monaco编辑器实例
 const codeEditor = ref(null)

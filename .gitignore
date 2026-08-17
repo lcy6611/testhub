@@ -68,6 +68,8 @@ static/
 
 # 顶层临时验证脚本、截图和输出
 /_*.py
+/_*.log
+/_*.json
 /*.png
 /kb*.txt
 /dify_test.txt
@@ -76,3 +78,9 @@ static/
 /verify_*.txt
 /10
 /nul
+
+# 后端临时重跑配置（调试用，不入库）
+backend/settings_rerun.py
+
+# 临时迁移/部署验证报告
+reports/deploy_migrate_verify.md

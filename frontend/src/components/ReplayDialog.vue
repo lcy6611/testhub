@@ -9,21 +9,27 @@
   >
     <el-form :model="form" label-width="110px">
       <el-form-item label="选择脚本" required>
-        <el-select
-          v-model="form.scriptId"
-          filterable
-          placeholder="选择已保存的录制脚本"
-          style="width:100%"
-          :loading="listLoading"
-          @change="onSelect"
-        >
-          <el-option
-            v-for="s in scripts"
-            :key="s.id"
-            :label="`#${s.id} ${s.source_testcase_title || s.name || '录制脚本'}`"
-            :value="s.id"
-          />
-        </el-select>
+        <div style="display:flex;gap:8px;width:100%">
+          <el-select
+            v-model="form.scriptId"
+            filterable
+            placeholder="选择已保存的录制脚本"
+            style="flex:1"
+            :loading="listLoading"
+            @change="onSelect"
+          >
+            <el-option
+              v-for="s in scripts"
+              :key="s.id"
+              :label="`#${s.id} ${s.source_testcase_title || s.name || '录制脚本'}`"
+              :value="s.id"
+            />
+          </el-select>
+          <el-button :icon="Refresh" :loading="listLoading" @click="loadScripts">刷新</el-button>
+        </div>
+        <div v-if="!listLoading && scripts.length === 0" style="color:#e6a23c;font-size:12px;margin-top:4px">
+          暂无已保存的录制脚本，请先通过「开始录制」向导保存。
+        </div>
       </el-form-item>
 
       <el-form-item label="Base URL">
@@ -65,8 +71,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { getCaseScriptGenerations, runRecordedScript } from '@/api/ui_automation'
 
 const props = defineProps({
@@ -131,6 +138,10 @@ function truncate(text) {
 }
 
 onMounted(loadScripts)
+// 每次打开弹窗都重新拉取列表，避免显示保存前的旧快照
+watch(() => props.modelValue, (v) => {
+  if (v) loadScripts()
+})
 </script>
 
 <style scoped>

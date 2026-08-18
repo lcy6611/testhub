@@ -27,6 +27,23 @@ from django.utils import timezone
 VIDEO_SIZE = {"width": 1280, "height": 720}
 
 
+def _video_duration(video_path):
+    """获取视频时长（秒），失败返回 None。"""
+    if not video_path or not os.path.exists(video_path):
+        return None
+    try:
+        import cv2
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        cap.release()
+        if fps and frames:
+            return round(frames / fps, 2)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def _inject_video_options(code, video_dir):
     """在 Python Playwright 脚本中注入录屏参数。
 
@@ -48,12 +65,18 @@ def _inject_video_options(code, video_dir):
 
 
 def _collect_video(video_dir, script_id=None):
-    """从 Playwright 录屏目录收集 webm 视频，移动到 MEDIA_ROOT/replay_videos/ 并返回 URL。"""
+    """从 Playwright 录屏目录收集 webm 视频，移动到 MEDIA_ROOT/replay_videos/ 并返回 URL。
+
+    Playwright 可能为每个 page 生成一个 webm，且文件名的字典序不一定代表时间先后，
+    因此按修改时间取最晚（通常对应最后一个 page / 包含最多操作）的文件。
+    """
     if not video_dir or not os.path.isdir(video_dir):
-        return None
-    webms = sorted([p for p in os.listdir(video_dir) if p.endswith('.webm')])
+        return None, None
+    webms = [p for p in os.listdir(video_dir) if p.endswith('.webm')]
     if not webms:
-        return None
+        return None, None
+    # 取修改时间最晚的视频片段，避免只拿到早期空白/短片段
+    webms.sort(key=lambda p: os.path.getmtime(os.path.join(video_dir, p)), reverse=True)
     video_path = os.path.join(video_dir, webms[0])
 
     target_dir = os.path.join(settings.MEDIA_ROOT, 'replay_videos')
@@ -65,7 +88,7 @@ def _collect_video(video_dir, script_id=None):
     media_url = settings.MEDIA_URL
     if not media_url.endswith('/'):
         media_url += '/'
-    return f"{media_url}replay_videos/{fname}"
+    return f"{media_url}replay_videos/{fname}", _video_duration(target)
 
 
 def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
@@ -86,7 +109,7 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
     """
     code = (code or "").strip()
     if not code:
-        return {"status": "failed", "error": "脚本为空，无法执行", "exit_code": None, "output": "", "video_url": None}
+        return {"status": "failed", "error": "脚本为空，无法执行", "exit_code": None, "output": "", "video_url": None, "video_duration": None}
 
     # 仅在脚本用无参 launch() 时注入 headless 设置，避免污染已显式指定参数的 launch
     if headless is True:
@@ -120,18 +143,20 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
         elapsed = round(time.time() - start, 2)
         ok = proc.returncode == 0
         output = (proc.stdout or "") + (proc.stderr or "")
-        video_url = _collect_video(video_dir, script_id=script_id) if video_dir else None
+        video_url, video_duration = (_collect_video(video_dir, script_id=script_id)
+                                     if video_dir else (None, None))
         return {
             "status": "passed" if ok else "failed",
             "exit_code": proc.returncode,
             "output": output[-4000:],
             "duration": elapsed,
             "video_url": video_url,
+            "video_duration": video_duration,
         }
     except subprocess.TimeoutExpired:
-        return {"status": "failed", "error": "执行超时（>%ss）" % timeout, "exit_code": None, "output": "", "video_url": None}
+        return {"status": "failed", "error": "执行超时（>%ss）" % timeout, "exit_code": None, "output": "", "video_url": None, "video_duration": None}
     except Exception as e:  # noqa: BLE001
-        return {"status": "failed", "error": str(e), "exit_code": None, "output": "", "video_url": None}
+        return {"status": "failed", "error": str(e), "exit_code": None, "output": "", "video_url": None, "video_duration": None}
     finally:
         try:
             os.remove(tmp_path)
@@ -151,7 +176,7 @@ def run_recorded_script(script_generation, headless=None, browser="chromium", ti
     兼容旧的录制任务链路；新链路推荐直接用 TestScript 的「执行」端点。
 
     Returns:
-        dict: {status, exit_code, output, duration, video_url}
+        dict: {status, exit_code, output, duration, video_url, video_duration}
     """
     # 优先使用前端编辑后传入的代码（回放前可在弹窗里修正 locator），否则用库中保存的
     code = (code_override or getattr(script_generation, "playwright_code", "") or "").strip()

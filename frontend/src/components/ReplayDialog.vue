@@ -103,16 +103,24 @@
       :title="`执行状态：${runResult.status}`"
     >
       <template #sub-title>
-        <span>耗时 {{ runResult.result?.duration }}s · 退出码 {{ runResult.result?.exit_code }}</span>
+        <span>执行耗时 {{ runResult.result?.duration }}s · 退出码 {{ runResult.result?.exit_code }}</span>
         <div style="color:#909399;font-size:12px;margin-top:6px">
-          {{ runResult.result?.video_url ? '已生成回放视频，下方可直接观看。' : '未录制视频或录制失败，仅返回结果与日志。' }}
+          <span v-if="runResult.result?.video_url">
+            已生成回放视频，时长 {{ formatDuration(runResult.result?.video_duration) }}，下方可直接观看。
+          </span>
+          <span v-else>未录制视频或录制失败，仅返回结果与日志。</span>
         </div>
       </template>
     </el-result>
 
     <!-- 回放视频 -->
     <div v-if="runResult?.result?.video_url" class="replay-video">
-      <div class="video-title">回放视频</div>
+      <div class="video-title">
+        回放视频
+        <span v-if="runResult.result?.video_duration" class="video-duration">
+          {{ formatDuration(runResult.result.video_duration) }}
+        </span>
+      </div>
       <video
         controls
         preload="metadata"
@@ -121,6 +129,9 @@
       >
         您的浏览器不支持视频播放。
       </video>
+      <div style="color:#909399;font-size:12px;margin-top:6px">
+        提示：脚本在容器内全速执行，若操作间隔很短，视频时长会短于执行耗时，这属于正常现象。
+      </div>
     </div>
 
     <!-- 失败友好步骤提示 -->
@@ -257,6 +268,14 @@ function truncate(text) {
   return text.length > max ? text.slice(0, max) + '\n…（已截断）' : text
 }
 
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return '--'
+  const total = Math.round(seconds * 100) / 100
+  const m = Math.floor(total / 60)
+  const s = (total % 60).toFixed(2).padStart(5, '0')
+  return m > 0 ? `${m}:${s}` : `0:${s}`
+}
+
 onMounted(loadScripts)
 // 每次打开弹窗都重新拉取列表，避免显示保存前的旧快照
 watch(() => props.modelValue, (v) => {
@@ -330,5 +349,16 @@ watch(() => props.modelValue, (v) => {
   font-size: 14px;
   color: #303133;
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.replay-video .video-duration {
+  font-weight: normal;
+  font-size: 12px;
+  color: #606266;
+  background: #e4e7ed;
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 </style>

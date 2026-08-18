@@ -77,20 +77,24 @@
             <g clip-path="url(#left-eye-clip)">
               <!-- 战斗眼白：浅黄白发光 -->
               <path class="sclera" d="M132,74 C98,54 58,46 18,50 C58,80 98,80 132,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
-              <!-- 红色虹膜 -->
-              <ellipse cx="70" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
-              <!-- 黑色竖瞳 -->
-              <ellipse cx="70" cy="63" rx="6.5" ry="14" fill="#000000" />
-              <!-- 高光 -->
-              <ellipse cx="62" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
-              <circle cx="76" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
+              <g class="iris-group">
+                <!-- 红色虹膜 -->
+                <ellipse cx="70" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+                <!-- 黑色竖瞳 -->
+                <ellipse cx="70" cy="63" rx="6.5" ry="14" fill="#000000" />
+                <!-- 高光 -->
+                <ellipse cx="62" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
+                <circle cx="76" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
+              </g>
             </g>
             <g clip-path="url(#right-eye-clip)">
               <path class="sclera" d="M188,74 C222,54 262,46 302,50 C262,80 222,80 188,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
-              <ellipse cx="250" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
-              <ellipse cx="250" cy="63" rx="6.5" ry="14" fill="#000000" />
-              <ellipse cx="242" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
-              <circle cx="256" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
+              <g class="iris-group iris-group--r">
+                <ellipse cx="250" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+                <ellipse cx="250" cy="63" rx="6.5" ry="14" fill="#000000" />
+                <ellipse cx="242" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
+                <circle cx="256" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
+              </g>
             </g>
           </g>
 
@@ -393,10 +397,11 @@ function renderMarkdown(text) {
   })
 
   text = normalizeMarkdownBlocks(text)
-  let html = escHtml(text)
 
+  // 先提取 Markdown 表格（此时 | 尚未被 escHtml 转义），再转义正文
   const tables = []
-  html = renderMarkdownTables(html, tables)
+  text = renderMarkdownTables(text, tables)
+  let html = escHtml(text)
 
   const lines = html.split('\n')
   const out = []
@@ -594,13 +599,13 @@ function parseMarkdownTable(block) {
 
   let html = '<table class="md-table"><thead><tr>'
   headers.forEach((h, idx) => {
-    html += `<th style="text-align:${aligns[idx] || 'left'}">${processInline(h)}</th>`
+    html += `<th style="text-align:${aligns[idx] || 'left'}">${processInline(escHtml(h))}</th>`
   })
   html += '</tr></thead><tbody>'
   bodyRows.forEach(cells => {
     html += '<tr>'
     cells.forEach((c, idx) => {
-      html += `<td style="text-align:${aligns[idx] || 'left'}">${processInline(c || '')}</td>`
+      html += `<td style="text-align:${aligns[idx] || 'left'}">${processInline(escHtml(c || ''))}</td>`
     })
     html += '</tr>'
   })
@@ -1051,6 +1056,21 @@ onUnmounted(() => {
 .eyelid--r {
   animation-delay: 0.2s;
 }
+/* 虹膜组：思考时可叠加扫视动画 */
+.iris-group {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.iris-group--r {
+  animation-delay: 0.12s;
+}
+/* AI 思考：快速眨眼 + 虹膜急促左右扫视 */
+.agent-header.is-alert .eyelid {
+  animation-duration: 1.1s;
+}
+.agent-header.is-alert .iris-group {
+  animation: thinking-scan 0.55s infinite ease-in-out alternate;
+}
 /* 眉骨阴影 */
 .brow-bar {
   fill: rgba(0, 0, 0, 0.6);
@@ -1112,6 +1132,10 @@ onUnmounted(() => {
 @keyframes alert-pupil-pulse {
   0%, 100% { filter: brightness(1) drop-shadow(0 0 4px #ff0000); }
   50% { filter: brightness(2.2) drop-shadow(0 0 14px #ff3300); }
+}
+@keyframes thinking-scan {
+  0% { transform: translateX(-4px); }
+  100% { transform: translateX(4px); }
 }
 
 .header-left {

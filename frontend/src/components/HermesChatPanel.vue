@@ -8,7 +8,7 @@
       @mousemove="onHeaderMove"
       @mouseenter="onHeaderEnter"
       @mouseleave="onHeaderLeave">
-      <!-- 背景：科技 HUD + 红色威慑目镜 -->
+      <!-- 背景：觉醒之眼 HUD -->
       <div class="header-hud" aria-hidden="true">
         <div class="hud-grid"></div>
         <div class="hud-scanline"></div>
@@ -19,55 +19,93 @@
         <div class="hud-lock" v-if="loading"></div>
         <svg class="bg-eyes-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <filter id="iron-glow" x="-80%" y="-80%" width="260%" height="260%">
-              <feGaussianBlur stdDeviation="5" result="blur1" />
-              <feGaussianBlur stdDeviation="11" result="blur2" />
+            <filter id="eye-glow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="6" result="blur1" />
+              <feGaussianBlur stdDeviation="14" result="blur2" />
+              <feGaussianBlur stdDeviation="28" result="blur3" />
+              <feMerge>
+                <feMergeNode in="blur3" />
+                <feMergeNode in="blur2" />
+                <feMergeNode in="blur1" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="pupil-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="3" result="blur1" />
+              <feGaussianBlur stdDeviation="8" result="blur2" />
               <feMerge>
                 <feMergeNode in="blur2" />
                 <feMergeNode in="blur1" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-            <linearGradient id="iron-eye" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#ff1a1a" />
-              <stop offset="45%" stop-color="#ff8a8a" />
-              <stop offset="55%" stop-color="#ff8a8a" />
-              <stop offset="100%" stop-color="#b30000" />
+            <radialGradient id="sclera-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="30%">
+              <stop offset="0%" stop-color="#fff8aa" />
+              <stop offset="35%" stop-color="#ffd700" />
+              <stop offset="75%" stop-color="#ff8c00" />
+              <stop offset="100%" stop-color="#b35900" />
+            </radialGradient>
+            <radialGradient id="iris-gradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ff4d4d" />
+              <stop offset="60%" stop-color="#cc0000" />
+              <stop offset="100%" stop-color="#660000" />
+            </radialGradient>
+            <linearGradient id="eyelid-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#0a0a0a" />
+              <stop offset="100%" stop-color="#1a0505" />
             </linearGradient>
-            <!-- 高达式：细长、内侧锐利锐角 -->
             <clipPath id="left-eye-clip">
-              <path d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" />
+              <ellipse cx="86" cy="60" rx="58" ry="32" />
             </clipPath>
             <clipPath id="right-eye-clip">
-              <path d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" />
+              <ellipse cx="234" cy="60" rx="58" ry="32" />
             </clipPath>
           </defs>
 
-          <!-- 眼眶外框与眼窝（底层，不随注视移动） -->
+          <!-- 左眼眶底层（眼窝黑 + 外框） -->
           <g class="eye-socket left">
-            <path class="socket-shape" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" />
-            <rect class="eye-dark" x="50" y="44" width="100" height="36" />
+            <ellipse class="socket-shape" cx="86" cy="60" rx="60" ry="34" />
+            <rect class="eye-dark" x="20" y="20" width="132" height="80" />
           </g>
+          <!-- 右眼眶底层 -->
           <g class="eye-socket right">
-            <path class="socket-shape" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" />
-            <rect class="eye-dark" x="170" y="44" width="100" height="36" />
+            <ellipse class="socket-shape" cx="234" cy="60" rx="60" ry="34" />
+            <rect class="eye-dark" x="168" y="20" width="132" height="80" />
           </g>
 
-          <!-- 发光核心：随鼠标注视移动（gaze） -->
+          <!-- 发光眼白 + 瞳孔：随鼠标注视移动 -->
           <g class="eye-gaze" :transform="'translate(' + eyeLook.x + ',' + eyeLook.y + ')'">
             <g clip-path="url(#left-eye-clip)">
-              <path class="eye-core" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
-              <path class="eye-bright" d="M140,56 L84,53 Q74,60 84,67 L140,62 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
+              <!-- 黄色发光眼白 -->
+              <ellipse cx="86" cy="60" rx="58" ry="32" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <!-- 红色虹膜 -->
+              <ellipse cx="86" cy="60" rx="20" ry="18" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+              <!-- 黑色竖瞳 -->
+              <ellipse cx="86" cy="60" rx="6" ry="14" fill="#000000" />
+              <!-- 高光 -->
+              <ellipse cx="78" cy="48" rx="12" ry="7" fill="#ffffff" opacity="0.55" filter="url(#pupil-glow)" />
+              <circle cx="92" cy="66" r="2.5" fill="#ffffff" opacity="0.8" />
             </g>
             <g clip-path="url(#right-eye-clip)">
-              <path class="eye-core" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
-              <path class="eye-bright" d="M180,56 L236,53 Q246,60 236,67 L180,62 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
+              <ellipse cx="234" cy="60" rx="58" ry="32" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <ellipse cx="234" cy="60" rx="20" ry="18" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+              <ellipse cx="234" cy="60" rx="6" ry="14" fill="#000000" />
+              <ellipse cx="226" cy="48" rx="12" ry="7" fill="#ffffff" opacity="0.55" filter="url(#pupil-glow)" />
+              <circle cx="240" cy="66" r="2.5" fill="#ffffff" opacity="0.8" />
             </g>
           </g>
 
-          <!-- 眼皮（顶层，闭眼时盖住） -->
-          <path class="eyelid" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="#3a0606" />
-          <path class="eyelid eyelid--r" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="#3a0606" />
+          <!-- 眼皮（顶层，偶尔覆盖） -->
+          <g clip-path="url(#left-eye-clip)">
+            <ellipse class="eyelid" cx="86" cy="60" rx="60" ry="34" fill="url(#eyelid-gradient)" />
+          </g>
+          <g clip-path="url(#right-eye-clip)">
+            <ellipse class="eyelid eyelid--r" cx="234" cy="60" rx="60" ry="34" fill="url(#eyelid-gradient)" />
+          </g>
+
+          <!-- 眼部上方装甲阴影条 -->
+          <path class="brow-bar" d="M20,46 Q86,22 152,46 L152,52 Q86,28 20,52 Z" />
+          <path class="brow-bar" d="M168,46 Q234,22 300,46 L300,52 Q234,28 168,52 Z" />
         </svg>
       </div>
 
@@ -233,7 +271,7 @@ function onHeaderMove(e) {
   const rect = el.getBoundingClientRect()
   const nx = Math.max(-1, Math.min(1, (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2)))
   const ny = Math.max(-1, Math.min(1, (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2)))
-  eyeLook.value = { x: Math.round(nx * 7), y: Math.round(ny * 4) }
+  eyeLook.value = { x: Math.round(nx * 12), y: Math.round(ny * 7) }
 }
 function onHeaderLeave() {
   headerHover.value = false
@@ -879,8 +917,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  background: linear-gradient(135deg, #11171d 0%, #1b0e12 100%);
-  border-bottom: 1px solid rgba(255, 90, 90, 0.18);
+  background: linear-gradient(135deg, #070708 0%, #0f0806 100%);
+  border-bottom: 1px solid rgba(255, 140, 0, 0.22);
   color: #fff;
   overflow: hidden;
 }
@@ -899,8 +937,8 @@ onUnmounted(() => {
   position: absolute;
   inset: -50%;
   background-image:
-    linear-gradient(rgba(255, 60, 60, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 60, 60, 0.09) 1px, transparent 1px);
+    linear-gradient(rgba(255, 160, 40, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 160, 40, 0.06) 1px, transparent 1px);
   background-size: 26px 26px;
   animation: hud-grid-move 18s linear infinite;
   opacity: 0.5;
@@ -916,8 +954,8 @@ onUnmounted(() => {
   right: 0;
   height: 2px;
   top: -4%;
-  background: linear-gradient(90deg, transparent, rgba(255, 90, 90, 0.75), transparent);
-  box-shadow: 0 0 12px rgba(255, 60, 60, 0.6);
+  background: linear-gradient(90deg, transparent, rgba(255, 180, 40, 0.75), transparent);
+  box-shadow: 0 0 12px rgba(255, 140, 0, 0.55);
   animation: hud-scan 5s linear infinite;
   opacity: 0.7;
 }
@@ -932,7 +970,7 @@ onUnmounted(() => {
   position: absolute;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 110, 110, 0.6);
+  border: 2px solid rgba(255, 160, 40, 0.55);
 }
 .hud-tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
 .hud-tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
@@ -947,8 +985,8 @@ onUnmounted(() => {
   height: 230px;
   margin: -115px 0 0 -115px;
   border-radius: 50%;
-  border: 1px dashed rgba(255, 70, 70, 0.5);
-  box-shadow: 0 0 20px rgba(255, 60, 60, 0.35) inset;
+  border: 1px dashed rgba(255, 140, 0, 0.45);
+  box-shadow: 0 0 20px rgba(255, 120, 0, 0.3) inset;
   animation: lock-spin 4s linear infinite;
 }
 .hud-lock::before {
@@ -956,7 +994,7 @@ onUnmounted(() => {
   position: absolute;
   inset: 34px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 70, 70, 0.3);
+  border: 1px solid rgba(255, 140, 0, 0.3);
 }
 @keyframes lock-spin {
   0% { transform: rotate(0deg); }
@@ -971,99 +1009,95 @@ onUnmounted(() => {
   transition: filter 0.3s ease;
 }
 
-/* 眼睛 */
+/* 觉醒之眼 */
 .eye-socket .socket-shape {
-  fill: rgba(0, 0, 0, 0.4);
-  stroke: rgba(255, 120, 120, 0.35);
-  stroke-width: 1.5;
+  fill: #050505;
+  stroke: rgba(255, 140, 0, 0.28);
+  stroke-width: 2;
 }
 .eye-socket .eye-dark {
-  fill: #1a0404;
+  fill: #080300;
 }
-/* 发光核心：缓慢呼吸，威慑点亮 */
-.eye-socket .eye-core {
+.eye-gaze ellipse[fill="url(#sclera-gradient)"] {
   transform-box: fill-box;
   transform-origin: center;
-  animation: iron-breathe 3.6s infinite ease-in-out;
+  animation: sclera-breathe 4s infinite ease-in-out;
 }
-.eye-socket.right .eye-core {
-  animation-delay: 0.6s;
-}
-.eye-socket .eye-bright {
+.eye-gaze ellipse[fill="url(#iris-gradient)"] {
   transform-box: fill-box;
   transform-origin: center;
-  animation: iron-bright 3.6s infinite ease-in-out;
+  animation: pupil-breathe 4s infinite ease-in-out;
 }
-.eye-socket.right .eye-bright {
-  animation-delay: 0.6s;
-}
-/* 眼皮：缓慢掠过的闭眼，战斗感 */
+/* 眼皮：缓慢掠过的闭眼 */
 .eyelid {
   transform-box: fill-box;
-  transform-origin: center;
-  animation: iron-blink 7s infinite ease-in-out;
+  transform-origin: center top;
+  animation: eye-blink 8s infinite ease-in-out;
 }
 .eyelid--r {
-  animation-delay: 0.15s;
+  animation-delay: 0.2s;
+}
+/* 眉骨阴影 */
+.brow-bar {
+  fill: rgba(0, 0, 0, 0.55);
 }
 
-/* 悬停警戒：眼睛更亮、四角点亮 */
+/* 悬停警戒：眼睛更亮 */
 .agent-header.is-hover .bg-eyes-svg {
-  filter: brightness(1.18);
+  filter: brightness(1.22) saturate(1.2);
 }
 .agent-header.is-hover .hud-corner {
-  border-color: rgba(255, 150, 150, 0.95);
+  border-color: rgba(255, 180, 60, 0.95);
 }
-/* AI 思考：红色锁定脉冲 + 扫描加速 + 内发光 */
-.agent-header.is-alert .eye-core {
-  animation: alert-pulse 1.1s infinite ease-in-out;
+/* AI 思考：红色瞳孔急促脉冲 + 扫描加速 + 内发光 */
+.agent-header.is-alert .eye-gaze ellipse[fill="url(#iris-gradient)"] {
+  animation: alert-pupil-pulse 0.9s infinite ease-in-out;
 }
 .agent-header.is-alert .hud-scanline {
-  animation-duration: 1.6s;
+  animation-duration: 1.4s;
   opacity: 1;
 }
 .agent-header.is-alert .hud-corner {
-  border-color: rgba(255, 60, 60, 1);
+  border-color: rgba(255, 80, 20, 1);
 }
 .agent-header.is-alert {
-  box-shadow: inset 0 0 32px rgba(255, 40, 40, 0.4);
-}
-@keyframes alert-pulse {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.7); }
+  box-shadow: inset 0 0 36px rgba(255, 60, 0, 0.45);
 }
 
-@keyframes iron-breathe {
+@keyframes sclera-breathe {
   0%, 100% {
-    filter: brightness(0.85);
-    opacity: 0.85;
+    filter: brightness(0.9);
+    opacity: 0.92;
+  }
+  50% {
+    filter: brightness(1.2);
+    opacity: 1;
+  }
+}
+
+@keyframes pupil-breathe {
+  0%, 100% {
+    filter: brightness(0.9);
   }
   50% {
     filter: brightness(1.25);
-    opacity: 1;
   }
 }
 
-@keyframes iron-bright {
-  0%, 100% {
-    opacity: 0.6;
-    transform: scale(0.96);
-  }
-  50% {
-    opacity: 0.95;
-    transform: scale(1.02);
-  }
-}
-
-@keyframes iron-blink {
-  0%, 92%, 100% {
+@keyframes eye-blink {
+  0%, 94%, 100% {
     transform: scaleY(0);
     opacity: 0;
   }
-  94%, 96% {
+  96%, 98% {
     transform: scaleY(1);
     opacity: 1;
   }
+}
+
+@keyframes alert-pupil-pulse {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 4px #ff0000); }
+  50% { filter: brightness(2.2) drop-shadow(0 0 14px #ff3300); }
 }
 
 .header-left {

@@ -105,7 +105,7 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
         script_id: 用于生成视频文件名前缀的脚本 ID
 
     Returns:
-        dict: {status, exit_code, output, duration, video_url}
+        dict: {status, exit_code, output, duration, video_url, video_duration}
     """
     code = (code or "").strip()
     if not code:

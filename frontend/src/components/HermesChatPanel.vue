@@ -55,61 +55,61 @@
               <stop offset="100%" stop-color="#1a0505" />
             </linearGradient>
             <clipPath id="left-eye-clip">
-              <path d="M150,74 C116,58 76,50 36,54 C76,80 116,80 150,74 Z" />
+              <path d="M132,74 C98,54 58,46 18,50 C58,80 98,80 132,74 Z" />
             </clipPath>
             <clipPath id="right-eye-clip">
-              <path d="M170,74 C204,58 244,50 284,54 C244,80 204,80 170,74 Z" />
+              <path d="M188,74 C222,54 262,46 302,50 C262,80 222,80 188,74 Z" />
             </clipPath>
           </defs>
 
           <!-- 左眼眶底层（眼窝黑 + 外框） -->
           <g class="eye-socket left">
-            <path class="socket-shape" d="M152,74 C116,54 74,46 32,54 C74,84 116,84 152,74 Z" />
-            <rect class="eye-dark" x="20" y="20" width="140" height="80" />
+            <path class="socket-shape" d="M134,74 C98,54 56,46 14,54 C56,84 98,84 134,74 Z" />
+            <rect class="eye-dark" x="2" y="20" width="140" height="80" />
           </g>
           <!-- 右眼眶底层 -->
           <g class="eye-socket right">
-            <path class="socket-shape" d="M168,74 C204,54 246,46 288,54 C246,84 204,84 168,74 Z" />
-            <rect class="eye-dark" x="160" y="20" width="140" height="80" />
+            <path class="socket-shape" d="M186,74 C222,54 264,46 306,54 C264,84 222,84 186,74 Z" />
+            <rect class="eye-dark" x="178" y="20" width="140" height="80" />
           </g>
 
           <!-- 发光眼白 + 瞳孔：随鼠标注视移动 -->
           <g class="eye-gaze" :transform="'translate(' + eyeLook.x + ',' + eyeLook.y + ')'">
             <g clip-path="url(#left-eye-clip)">
               <!-- 战斗眼白：浅黄白发光 -->
-              <path class="sclera" d="M150,74 C116,58 76,50 36,54 C76,80 116,80 150,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <path class="sclera" d="M132,74 C98,54 58,46 18,50 C58,80 98,80 132,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
               <!-- 红色虹膜 -->
-              <ellipse cx="88" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+              <ellipse cx="70" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
               <!-- 黑色竖瞳 -->
-              <ellipse cx="88" cy="63" rx="6.5" ry="14" fill="#000000" />
+              <ellipse cx="70" cy="63" rx="6.5" ry="14" fill="#000000" />
               <!-- 高光 -->
-              <ellipse cx="80" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
-              <circle cx="94" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
+              <ellipse cx="62" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
+              <circle cx="76" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
             </g>
             <g clip-path="url(#right-eye-clip)">
-              <path class="sclera" d="M170,74 C204,58 244,50 284,54 C244,80 204,80 170,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
-              <ellipse cx="232" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
-              <ellipse cx="232" cy="63" rx="6.5" ry="14" fill="#000000" />
-              <ellipse cx="224" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
-              <circle cx="238" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
+              <path class="sclera" d="M188,74 C222,54 262,46 302,50 C262,80 222,80 188,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <ellipse cx="250" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+              <ellipse cx="250" cy="63" rx="6.5" ry="14" fill="#000000" />
+              <ellipse cx="242" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
+              <circle cx="256" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
             </g>
           </g>
 
           <!-- 上眼睑红色战斗眼线 -->
-          <path class="eyeliner" d="M154,74 C116,46 72,40 30,50" fill="none" />
-          <path class="eyeliner" d="M166,74 C204,46 248,40 290,50" fill="none" />
+          <path class="eyeliner" d="M136,74 C98,46 54,40 12,50" fill="none" />
+          <path class="eyeliner" d="M184,74 C222,46 266,40 308,50" fill="none" />
 
           <!-- 眼皮（顶层，偶尔覆盖） -->
           <g clip-path="url(#left-eye-clip)">
-            <path class="eyelid" d="M150,74 C116,58 76,50 36,54 C76,80 116,80 150,74 Z" fill="url(#eyelid-gradient)" />
+            <path class="eyelid" d="M132,74 C98,54 58,46 18,50 C58,80 98,80 132,74 Z" fill="url(#eyelid-gradient)" />
           </g>
           <g clip-path="url(#right-eye-clip)">
-            <path class="eyelid eyelid--r" d="M170,74 C204,58 244,50 284,54 C244,80 204,80 170,74 Z" fill="url(#eyelid-gradient)" />
+            <path class="eyelid eyelid--r" d="M188,74 C222,54 262,46 302,50 C262,80 222,80 188,74 Z" fill="url(#eyelid-gradient)" />
           </g>
 
           <!-- 眉骨阴影 -->
-          <path class="brow-bar" d="M18,42 Q86,18 156,42 L154,48 Q86,24 20,48 Z" />
-          <path class="brow-bar" d="M302,42 Q234,18 164,42 L166,48 Q234,24 300,48 Z" />
+          <path class="brow-bar" d="M0,42 Q68,18 138,42 L136,48 Q68,24 2,48 Z" />
+          <path class="brow-bar" d="M320,42 Q252,18 182,42 L184,48 Q252,24 318,48 Z" />
         </svg>
       </div>
 
@@ -275,7 +275,7 @@ function onHeaderMove(e) {
   const rect = el.getBoundingClientRect()
   const nx = Math.max(-1, Math.min(1, (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2)))
   const ny = Math.max(-1, Math.min(1, (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2)))
-  eyeLook.value = { x: Math.round(nx * 12), y: Math.round(ny * 7) }
+  eyeLook.value = { x: Math.round(nx * 16), y: Math.round(ny * 9) }
 }
 function onHeaderLeave() {
   headerHover.value = false
@@ -1036,7 +1036,7 @@ onUnmounted(() => {
 .eyeliner {
   fill: none;
   stroke: #ff1a1a;
-  stroke-width: 4.5;
+  stroke-width: 3.2;
   stroke-linecap: round;
   filter: drop-shadow(0 0 5px #ff0000) drop-shadow(0 0 10px #ff3300);
   opacity: 0.9;

@@ -1,9 +1,22 @@
 <template>
   <div class="chat-panel" :class="{ 'is-compact': compact }">
     <!-- 顶部标题栏 -->
-    <div class="agent-header">
-      <!-- 背景：战争机器人扫描眼 -->
-      <div class="header-bg-eyes" aria-hidden="true">
+    <div
+      ref="headerRef"
+      class="agent-header"
+      :class="{ 'is-hover': headerHover, 'is-alert': loading }"
+      @mousemove="onHeaderMove"
+      @mouseenter="onHeaderEnter"
+      @mouseleave="onHeaderLeave">
+      <!-- 背景：科技 HUD + 红色威慑目镜 -->
+      <div class="header-hud" aria-hidden="true">
+        <div class="hud-grid"></div>
+        <div class="hud-scanline"></div>
+        <div class="hud-corner hud-tl"></div>
+        <div class="hud-corner hud-tr"></div>
+        <div class="hud-corner hud-bl"></div>
+        <div class="hud-corner hud-br"></div>
+        <div class="hud-lock" v-if="loading"></div>
         <svg class="bg-eyes-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <filter id="iron-glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -30,27 +43,31 @@
             </clipPath>
           </defs>
 
-          <!-- 左眼 -->
+          <!-- 眼眶外框与眼窝（底层，不随注视移动） -->
           <g class="eye-socket left">
             <path class="socket-shape" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" />
+            <rect class="eye-dark" x="50" y="44" width="100" height="36" />
+          </g>
+          <g class="eye-socket right">
+            <path class="socket-shape" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" />
+            <rect class="eye-dark" x="170" y="44" width="100" height="36" />
+          </g>
+
+          <!-- 发光核心：随鼠标注视移动（gaze） -->
+          <g class="eye-gaze" :transform="'translate(' + eyeLook.x + ',' + eyeLook.y + ')'">
             <g clip-path="url(#left-eye-clip)">
-              <rect class="eye-dark" x="50" y="44" width="100" height="36" />
               <path class="eye-core" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
               <path class="eye-bright" d="M140,56 L84,53 Q74,60 84,67 L140,62 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
             </g>
-            <path class="eyelid" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="#3a0606" />
-          </g>
-
-          <!-- 右眼 -->
-          <g class="eye-socket right">
-            <path class="socket-shape" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" />
             <g clip-path="url(#right-eye-clip)">
-              <rect class="eye-dark" x="170" y="44" width="100" height="36" />
               <path class="eye-core" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
               <path class="eye-bright" d="M180,56 L236,53 Q246,60 236,67 L180,62 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
             </g>
-            <path class="eyelid" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="#3a0606" />
           </g>
+
+          <!-- 眼皮（顶层，闭眼时盖住） -->
+          <path class="eyelid" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="#3a0606" />
+          <path class="eyelid eyelid--r" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="#3a0606" />
         </svg>
       </div>
 
@@ -205,6 +222,26 @@ const loading = ref(false)
 const messagesRef = ref(null)
 let currentController = null
 let userScrolledUp = false
+
+// 表头交互：鼠标注视 + 悬停警戒
+const headerRef = ref(null)
+const headerHover = ref(false)
+const eyeLook = ref({ x: 0, y: 0 })
+function onHeaderMove(e) {
+  const el = headerRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const nx = Math.max(-1, Math.min(1, (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2)))
+  const ny = Math.max(-1, Math.min(1, (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2)))
+  eyeLook.value = { x: Math.round(nx * 7), y: Math.round(ny * 4) }
+}
+function onHeaderLeave() {
+  headerHover.value = false
+  eyeLook.value = { x: 0, y: 0 }
+}
+function onHeaderEnter() {
+  headerHover.value = true
+}
 
 function onMessagesScroll() {
   const el = messagesRef.value
@@ -842,35 +879,108 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-  border-bottom: none;
+  background: linear-gradient(135deg, #11171d 0%, #1b0e12 100%);
+  border-bottom: 1px solid rgba(255, 90, 90, 0.18);
   color: #fff;
   overflow: hidden;
 }
 .is-compact .agent-header {
   padding: 12px 14px;
 }
-.header-bg-eyes {
+.header-hud {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity:  .6;
+  overflow: hidden;
+}
+/* 科技网格 */
+.hud-grid {
+  position: absolute;
+  inset: -50%;
+  background-image:
+    linear-gradient(rgba(255, 60, 60, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 60, 60, 0.09) 1px, transparent 1px);
+  background-size: 26px 26px;
+  animation: hud-grid-move 18s linear infinite;
+  opacity: 0.5;
+}
+@keyframes hud-grid-move {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(26px, 26px); }
+}
+/* 横向扫描线 */
+.hud-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  top: -4%;
+  background: linear-gradient(90deg, transparent, rgba(255, 90, 90, 0.75), transparent);
+  box-shadow: 0 0 12px rgba(255, 60, 60, 0.6);
+  animation: hud-scan 5s linear infinite;
+  opacity: 0.7;
+}
+@keyframes hud-scan {
+  0% { top: -4%; opacity: 0; }
+  10% { opacity: 0.85; }
+  90% { opacity: 0.85; }
+  100% { top: 104%; opacity: 0; }
+}
+/* 四角 HUD 框 */
+.hud-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 110, 110, 0.6);
+}
+.hud-tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+.hud-tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+.hud-bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+.hud-br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+/* 锁定准星光圈（AI 思考时显示） */
+.hud-lock {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 230px;
+  height: 230px;
+  margin: -115px 0 0 -115px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 70, 70, 0.5);
+  box-shadow: 0 0 20px rgba(255, 60, 60, 0.35) inset;
+  animation: lock-spin 4s linear infinite;
+}
+.hud-lock::before {
+  content: '';
+  position: absolute;
+  inset: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 70, 70, 0.3);
+}
+@keyframes lock-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 .bg-eyes-svg {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+  transition: filter 0.3s ease;
 }
+
+/* 眼睛 */
 .eye-socket .socket-shape {
-  fill: rgba(0, 0, 0, 0.35);
-  stroke: rgba(255, 255, 255, 0.22);
+  fill: rgba(0, 0, 0, 0.4);
+  stroke: rgba(255, 120, 120, 0.35);
   stroke-width: 1.5;
 }
 .eye-socket .eye-dark {
-  fill: #021c1a;
+  fill: #1a0404;
 }
-/* 发光核心：缓慢呼吸，营造钢铁侠双眼点亮感 */
+/* 发光核心：缓慢呼吸，威慑点亮 */
 .eye-socket .eye-core {
   transform-box: fill-box;
   transform-origin: center;
@@ -888,13 +998,39 @@ onUnmounted(() => {
   animation-delay: 0.6s;
 }
 /* 眼皮：缓慢掠过的闭眼，战斗感 */
-.eye-socket .eyelid {
+.eyelid {
   transform-box: fill-box;
   transform-origin: center;
   animation: iron-blink 7s infinite ease-in-out;
 }
-.eye-socket.right .eyelid {
+.eyelid--r {
   animation-delay: 0.15s;
+}
+
+/* 悬停警戒：眼睛更亮、四角点亮 */
+.agent-header.is-hover .bg-eyes-svg {
+  filter: brightness(1.18);
+}
+.agent-header.is-hover .hud-corner {
+  border-color: rgba(255, 150, 150, 0.95);
+}
+/* AI 思考：红色锁定脉冲 + 扫描加速 + 内发光 */
+.agent-header.is-alert .eye-core {
+  animation: alert-pulse 1.1s infinite ease-in-out;
+}
+.agent-header.is-alert .hud-scanline {
+  animation-duration: 1.6s;
+  opacity: 1;
+}
+.agent-header.is-alert .hud-corner {
+  border-color: rgba(255, 60, 60, 1);
+}
+.agent-header.is-alert {
+  box-shadow: inset 0 0 32px rgba(255, 40, 40, 0.4);
+}
+@keyframes alert-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.7); }
 }
 
 @keyframes iron-breathe {

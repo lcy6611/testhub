@@ -16,40 +16,40 @@
               </feMerge>
             </filter>
             <linearGradient id="iron-eye" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#03e6ff" />
-              <stop offset="45%" stop-color="#9af9ff" />
-              <stop offset="55%" stop-color="#9af9ff" />
-              <stop offset="100%" stop-color="#00b3cc" />
+              <stop offset="0%" stop-color="#ff1a1a" />
+              <stop offset="45%" stop-color="#ff8a8a" />
+              <stop offset="55%" stop-color="#ff8a8a" />
+              <stop offset="100%" stop-color="#b30000" />
             </linearGradient>
-            <!-- 钢铁侠式：外侧圆钝、内侧锐利、整体上扬 -->
+            <!-- 高达式：细长、内侧锐利锐角 -->
             <clipPath id="left-eye-clip">
-              <path d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" />
+              <path d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" />
             </clipPath>
             <clipPath id="right-eye-clip">
-              <path d="M178,58 L248,50 Q264,60 248,72 L178,66 Z" />
+              <path d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" />
             </clipPath>
           </defs>
 
           <!-- 左眼 -->
           <g class="eye-socket left">
-            <path class="socket-shape" d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" />
-            <g clip-path="  url(#left-eye-clip)">
+            <path class="socket-shape" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" />
+            <g clip-path="url(#left-eye-clip)">
               <rect class="eye-dark" x="50" y="44" width="100" height="36" />
-              <path class="eye-core" d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
-              <path class="eye-bright" d="M138,58 L80,52 Q70,60 80,68 L138,64 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
+              <path class="eye-core" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
+              <path class="eye-bright" d="M140,56 L84,53 Q74,60 84,67 L140,62 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
             </g>
-            <path class="eyelid" d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" fill="#063b38" />
+            <path class="eyelid" d="M144,56 L74,52 Q61,60 74,68 L144,64 Z" fill="#3a0606" />
           </g>
 
           <!-- 右眼 -->
           <g class="eye-socket right">
-            <path class="socket-shape" d="M178,58 L248, 50 Q264,60 248,72 L178,66 Z" />
+            <path class="socket-shape" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" />
             <g clip-path="url(#right-eye-clip)">
               <rect class="eye-dark" x="170" y="44" width="100" height="36" />
-              <path class="eye-core" d="M178,58 L248,50 Q264,60 248,72 L178,66 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
-              <path class="eye-bright" d="M182,58 L240,52 Q250,60 240,68 L182,64 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
+              <path class="eye-core" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
+              <path class="eye-bright" d="M180,56 L236,53 Q246,60 236,67 L180,62 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
             </g>
-            <path class="eyelid" d="M178,58 L248,50 Q264,60 248,72 L178,66 Z" fill="#063b38" />
+            <path class="eyelid" d="M176,56 L246,52 Q259,60 246,68 L176,64 Z" fill="#3a0606" />
           </g>
         </svg>
       </div>

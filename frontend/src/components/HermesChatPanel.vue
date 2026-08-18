@@ -5,7 +5,6 @@
       ref="headerRef"
       class="agent-header"
       :class="{ 'is-hover': headerHover, 'is-alert': loading }"
-      @mousemove="onHeaderMove"
       @mouseenter="onHeaderEnter"
       @mouseleave="onHeaderLeave">
       <!-- 背景：觉醒之眼 HUD -->
@@ -269,7 +268,8 @@ let userScrolledUp = false
 const headerRef = ref(null)
 const headerHover = ref(false)
 const eyeLook = ref({ x: 0, y: 0 })
-function onHeaderMove(e) {
+// 跟随鼠标：整个窗口内移动都让眼睛朝鼠标方向注视（视口坐标）
+function onWindowMove(e) {
   const el = headerRef.value
   if (!el) return
   const rect = el.getBoundingClientRect()
@@ -279,7 +279,6 @@ function onHeaderMove(e) {
 }
 function onHeaderLeave() {
   headerHover.value = false
-  eyeLook.value = { x: 0, y: 0 }
 }
 function onHeaderEnter() {
   headerHover.value = true
@@ -344,6 +343,7 @@ onMounted(async () => {
   } else {
     hermesStore.selectConversation(hermesStore.conversations[0].id)
   }
+  window.addEventListener('mousemove', onWindowMove)
 })
 
 watch(() => hermesStore.messages, () => {
@@ -901,6 +901,7 @@ onUpdated(() => {
 
 onUnmounted(() => {
   disposeCharts()
+  window.removeEventListener('mousemove', onWindowMove)
 })
 </script>
 

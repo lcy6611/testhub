@@ -68,6 +68,28 @@
         <span style="margin-left:10px;color:#909399;font-size:12px">推荐开启，执行完即可回看</span>
       </el-form-item>
 
+      <el-form-item>
+        <template #label>
+          <span>执行后等待页面加载</span>
+          <el-tooltip content="执行完最后一步（如点登录）不立即关闭页面，而是等待页面加载/跳转完成。可避免“点完即关闭”导致漏验登录是否成功，录屏也会覆盖跳转过程。" placement="top">
+            <el-icon style="margin-left:4px;vertical-align:middle;color:#909399"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </template>
+        <el-switch v-model="form.autoVerify" />
+        <span style="margin-left:10px;color:#909399;font-size:12px">默认开启，页面迟迟未就绪会判为失败</span>
+      </el-form-item>
+
+      <el-form-item label="执行速度">
+        <el-select v-model="form.slowMo" style="width:220px">
+          <el-option label="正常速度（不慢放）" :value="0" />
+          <el-option label="慢放 300ms/步" :value="300" />
+          <el-option label="慢放 500ms/步" :value="500" />
+          <el-option label="慢放 1000ms/步" :value="1000" />
+          <el-option label="慢放 2000ms/步" :value="2000" />
+        </el-select>
+        <span style="margin-left:10px;color:#909399;font-size:12px">放慢每步操作，录屏更易看清登录等过程</span>
+      </el-form-item>
+
       <el-form-item label="脚本代码">
         <div style="width:100%">
           <el-button size="small" :icon="Edit" @click="showCode = !showCode">
@@ -121,16 +143,30 @@
           {{ formatDuration(runResult.result.video_duration) }}
         </span>
       </div>
+      <div class="video-controls" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:13px;color:#606266">播放速度</span>
+        <el-select v-model="playbackRate" size="small" style="width:130px">
+          <el-option label="正常 1x" :value="1" />
+          <el-option label="0.75x" :value="0.75" />
+          <el-option label="0.5x 慢放" :value="0.5" />
+          <el-option label="0.25x 慢放" :value="0.25" />
+        </el-select>
+        <span style="font-size:12px;color:#909399">
+          执行仍为正常速度，慢放仅影响观看
+        </span>
+      </div>
       <video
+        ref="videoRef"
         controls
         preload="metadata"
         :src="runResult.result.video_url"
         style="width:100%;max-height:360px;background:#000;border-radius:6px"
+        @loadedmetadata="applyPlaybackRate"
       >
         您的浏览器不支持视频播放。
       </video>
       <div style="color:#909399;font-size:12px;margin-top:6px">
-        提示：脚本在容器内全速执行，若操作间隔很短，视频时长会短于执行耗时，这属于正常现象。
+        提示：脚本在容器内全速执行，若操作间隔很短，视频时长会短于执行耗时，这属于正常现象；可用上方「播放速度」慢放观看细节。
       </div>
     </div>
 
@@ -172,12 +208,22 @@ const failureHint = ref(null)
 const selectedBaseUrl = ref('')
 const showCode = ref(false)
 const editableCode = ref('')
+const videoRef = ref(null)
+const playbackRate = ref(1)
+
+// 应用播放倍速（默认 1x 正常速度，可切慢放，不影响实际执行速度）
+function applyPlaybackRate() {
+  if (videoRef.value) videoRef.value.playbackRate = playbackRate.value
+}
+watch(playbackRate, applyPlaybackRate)
 
 const form = reactive({
   scriptId: '',
   browser: 'chromium',
   headless: true,
   recordVideo: true,
+  autoVerify: true,
+  slowMo: 0,
 })
 
 async function loadScripts() {
@@ -213,6 +259,10 @@ async function onRun() {
       headless: form.headless,
       browser: form.browser,
       record_video: form.recordVideo,
+      // 执行后等待页面加载完成，避免“点完即关闭”漏验登录结果
+      auto_verify: form.autoVerify,
+      // 执行端慢放：放慢每步操作，录屏更易观察登录等过程
+      slow_mo: form.slowMo || undefined,
       // 把编辑后的代码一并传回，优先于库中保存的（用于修正 locator）
       playwright_code: showCode.value ? editableCode.value : undefined,
     })

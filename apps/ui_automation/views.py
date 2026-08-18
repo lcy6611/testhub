@@ -663,11 +663,15 @@ class TestScriptViewSet(viewsets.ModelViewSet):
             return Response({'id': script.id, 'status': 'failed',
                              'result': {'status': 'failed', 'error': '脚本内容为空', 'output': '', 'video_url': None}})
         record_video = _to_bool(request.data.get('record_video', True), default=True)
+        slow_mo = request.data.get('slow_mo') or None
+        auto_verify = _to_bool(request.data.get('auto_verify', False), default=False)
         result = run_playwright_code(
             code, headless=headless, browser=request.data.get('browser', 'chromium'),
             language=script.language or 'python',
             record_video=record_video,
             script_id=script.id,
+            slow_mo=slow_mo,
+            auto_verify=auto_verify,
         )
         # 持久化最近回放视频地址，方便列表/详情页也能回放观看
         if result.get('video_url'):

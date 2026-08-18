@@ -64,6 +64,50 @@ def _inject_video_options(code, video_dir):
     return marker + code
 
 
+def _inject_slow_mo(code, slow_mo):
+    """在 browser.launch(...) 中注入 slow_mo（每个操作之间固定延迟毫秒数）。
+
+    与 headless 注入同理：仅替换/追加 launch 参数，不影响脚本其余逻辑。
+    用于放慢实际执行速度，使录制视频更易观察每个步骤（尤其是登录这类跳转）。
+    """
+    ms = int(slow_mo or 0)
+    if ms <= 0:
+        return code
+
+    def repl(m):
+        inner = m.group(1).strip()
+        if "slow_mo=" in inner:
+            return m.group(0)
+        sep = ", " if inner else ""
+        return "launch(%s%sslow_mo=%d)" % (inner, sep, ms)
+
+    return re.sub(r"launch\(([^)]*)\)", repl, code)
+
+
+def _inject_auto_verify(code, timeout_ms=15000):
+    """在脚本关闭页面/浏览器前注入“等待页面加载完成”，避免 codegen 录制脚本
+    “点完登录就关闭页面”导致的漏验，同时让录屏覆盖跳转/加载过程。
+
+    超时即抛出，使“登录后页面迟迟未就绪”这一类问题能如实反映为执行失败，
+    而不是静默 passed。
+    """
+    wait_block = (
+        "\n    # 自动等待：执行后确认页面已加载/跳转完成（避免“点完即关闭”漏验）\n"
+        "    page.wait_for_load_state('networkidle', timeout=%d)\n" % timeout_ms
+    )
+    # 优先插在最末一次 page.close() 之前，保证页面仍处于打开状态
+    closes = list(re.finditer(r"^\s*page\.close\(\).*$", code, re.MULTILINE))
+    if closes:
+        idx = closes[-1].start()
+        return code[:idx] + wait_block + "\n" + code[idx:]
+    for token in (r"context\.close\(\)", r"browser\.close\(\)"):
+        ms = list(re.finditer(token, code, re.MULTILINE))
+        if ms:
+            idx = ms[-1].start()
+            return code[:idx] + wait_block + "\n" + code[idx:]
+    return code
+
+
 def _collect_video(video_dir, script_id=None):
     """从 Playwright 录屏目录收集 webm 视频，移动到 MEDIA_ROOT/replay_videos/ 并返回 URL。
 
@@ -92,7 +136,8 @@ def _collect_video(video_dir, script_id=None):
 
 
 def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
-                        language="python", record_video=False, script_id=None):
+                        language="python", record_video=False, script_id=None,
+                        slow_mo=None, auto_verify=False):
     """直接执行一段 Playwright 代码（不依赖 ORM 实例），返回执行结果。
 
     Args:
@@ -116,6 +161,13 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
         code = code.replace("launch()", "launch(headless=True)")
     elif headless is False:
         code = code.replace("launch()", "launch(headless=False)")
+
+    # 执行端慢放：在启动参数里加 slow_mo，放慢每一步操作（视频随之变长）
+    if slow_mo:
+        code = _inject_slow_mo(code, slow_mo)
+    # 执行后等待页面加载完成：避免“点完即关闭”漏验，并让录屏覆盖跳转过程
+    if auto_verify and language == "python":
+        code = _inject_auto_verify(code)
 
     video_dir = None
     if record_video and language == "python":
@@ -170,7 +222,7 @@ def run_playwright_code(code, headless=None, browser="chromium", timeout=300,
 
 
 def run_recorded_script(script_generation, headless=None, browser="chromium", timeout=300,
-                        code_override=None, record_video=False):
+                        code_override=None, record_video=False, slow_mo=None):
     """执行一条 UiScriptGeneration 的录制脚本（playwright_code 字段）。
 
     兼容旧的录制任务链路；新链路推荐直接用 TestScript 的「执行」端点。
@@ -183,6 +235,7 @@ def run_recorded_script(script_generation, headless=None, browser="chromium", ti
     result = run_playwright_code(
         code, headless=headless, browser=browser, timeout=timeout,
         record_video=record_video, script_id=getattr(script_generation, "id", None),
+        slow_mo=slow_mo,
     )
     _update_gen_status(script_generation, result.get("status"),
                        "" if result.get("status") == "passed" else (result.get("error") or "")[:1000])

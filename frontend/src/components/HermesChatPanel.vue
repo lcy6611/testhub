@@ -6,63 +6,51 @@
       <div class="header-bg-eyes" aria-hidden="true">
         <svg class="bg-eyes-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <filter id="robot-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3.5" result="blur" />
-              <feFlood flood-color="#00f0ff" result="color" />
-              <feComposite in="color" in2="blur" operator="in" result="glow" />
+            <filter id="iron-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="5" result="blur1" />
+              <feGaussianBlur stdDeviation="11" result="blur2" />
               <feMerge>
-                <feMergeNode in="glow" />
-                <feMergeNode in="glow" />
+                <feMergeNode in="blur2" />
+                <feMergeNode in="blur1" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-            <linearGradient id="eye-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#e0fffe" />
-              <stop offset="50%" stop-color="#00f0ff" />
-              <stop offset="100%" stop-color="#0099aa" />
+            <linearGradient id="iron-eye" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#03e6ff" />
+              <stop offset="45%" stop-color="#9af9ff" />
+              <stop offset="55%" stop-color="#9af9ff" />
+              <stop offset="100%" stop-color="#00b3cc" />
             </linearGradient>
+            <!-- 钢铁侠式：外侧圆钝、内侧锐利、整体上扬 -->
             <clipPath id="left-eye-clip">
-              <path d="M60,60 C60,35 75,22 100,22 C125,22 140,35 140,60 C140,85 125,98 100,98 C75,98 60,85 60,60 Z" />
+              <path d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" />
             </clipPath>
             <clipPath id="right-eye-clip">
-              <path d="M180,60 C180,35 195,22 220,22 C245,22 260,35 260,60 C260,85 245,98 220,98 C195,98 180,85 180,60 Z" />
+              <path d="M178,58 L248,50 Q264,60 248,72 L178,66 Z" />
             </clipPath>
           </defs>
 
-          <!-- 左眼眶 -->
+          <!-- 左眼 -->
           <g class="eye-socket left">
-            <path class="socket-frame" d="M55,60 C55,30 72,16 100,16 C128,16 145,30 145,60 C145,90 128,104 100,104 C72,104 55,90 55,60 Z" />
-            <path class="socket-rim" d="M52,60 C52,28 71,12 100,12 C129,12 148,28 148,60 C148,92 129,108 100,108 C71,108 52,92 52,60 Z" />
-            <g clip-path="url(#left-eye-clip)">
-              <rect class="eye-dark" x="55" y="16" width="90" height="88" />
-              <g class="eye-pupil left">
-                <circle cx="100" cy="60" r="18" fill="url(#eye-gradient)" filter="url(#robot-glow)" opacity="0.95" />
-                <circle cx="100" cy="60" r="9" fill="#fff" opacity="0.9" />
-                <circle cx="106" cy="54" r="3" fill="#fff" opacity="0.8" />
-              </g>
-              <rect class="scan-beam" x="55" y="18" width="90" height="2" fill="#fff" opacity="0.7" filter="url(#robot-glow)" />
+            <path class="socket-shape" d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" />
+            <g clip-path="  url(#left-eye-clip)">
+              <rect class="eye-dark" x="50" y="44" width="100" height="36" />
+              <path class="eye-core" d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
+              <path class="eye-bright" d="M138,58 L80,52 Q70,60 80,68 L138,64 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
             </g>
-            <rect class="eyelid" x="55" y="16" width="90" height="88" fill="#063b38" />
+            <path class="eyelid" d="M142,58 L72,50 Q56,60 72,72 L142,66 Z" fill="#063b38" />
           </g>
 
-          <!-- 右眼眶 -->
+          <!-- 右眼 -->
           <g class="eye-socket right">
-            <path class="socket-frame" d="M175,60 C175,30 192,16 220,16 C248,16 265,30 265,60 C265,90 248,104 220,104 C192,104 175,90 175,60 Z" />
-            <path class="socket-rim" d="M172,60 C172,28 191,12 220,12 C249,12 268,28 268,60 C268,92 249,108 220,108 C191,108 172,92 172,60 Z" />
+            <path class="socket-shape" d="M178,58 L248, 50 Q264,60 248,72 L178,66 Z" />
             <g clip-path="url(#right-eye-clip)">
-              <rect class="eye-dark" x="175" y="16" width="90" height="88" />
-              <g class="eye-pupil right">
-                <circle cx="220" cy="60" r="18" fill="url(#eye-gradient)" filter="url(#robot-glow)" opacity="0.95" />
-                <circle cx="220" cy="60" r="9" fill="#fff" opacity="0.9" />
-                <circle cx="226" cy="54" r="3" fill="#fff" opacity="0.8" />
-              </g>
-              <rect class="scan-beam" x="175" y="18" width="90" height="2" fill="#fff" opacity="0.7" filter="url(#robot-glow)" />
+              <rect class="eye-dark" x="170" y="44" width="100" height="36" />
+              <path class="eye-core" d="M178,58 L248,50 Q264,60 248,72 L178,66 Z" fill="url(#iron-eye)" filter="url(#iron-glow)" />
+              <path class="eye-bright" d="M182,58 L240,52 Q250,60 240,68 L182,64 Z" fill="#ffffff" opacity="0.85" filter="url(#iron-glow)" />
             </g>
-            <rect class="eyelid" x="175" y="16" width="90" height="88" fill="#063b38" />
+            <path class="eyelid" d="M178,58 L248,50 Q264,60 248,72 L178,66 Z" fill="#063b38" />
           </g>
-
-          <!-- 中央连接装甲 -->
-          <path class="center-armor" d="M145,54 L175,54 L180,60 L175,66 L145,66 L140,60 Z" />
         </svg>
       </div>
 
@@ -867,102 +855,78 @@ onUnmounted(() => {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.55;
+  opacity:  .6;
 }
 .bg-eyes-svg {
   width: 100%;
   height: 100%;
   display: block;
 }
-.eye-socket .socket-frame {
+.eye-socket .socket-shape {
   fill: rgba(0, 0, 0, 0.35);
-}
-.eye-socket .socket-rim {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.28);
-  stroke-width: 2.5;
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.5;
 }
 .eye-socket .eye-dark {
   fill: #021c1a;
 }
-.eye-socket .center-armor {
-  fill: rgba(0, 0, 0, 0.4);
-  stroke: rgba(255, 255, 255, 0.2);
-  stroke-width: 1;
+/* 发光核心：缓慢呼吸，营造钢铁侠双眼点亮感 */
+.eye-socket .eye-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: iron-breathe 3.6s infinite ease-in-out;
 }
+.eye-socket.right .eye-core {
+  animation-delay: 0.6s;
+}
+.eye-socket .eye-bright {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: iron-bright 3.6s infinite ease-in-out;
+}
+.eye-socket.right .eye-bright {
+  animation-delay: 0.6s;
+}
+/* 眼皮：缓慢掠过的闭眼，战斗感 */
 .eye-socket .eyelid {
-  transform-origin: center top;
-  animation: robot-blink 4.5s infinite ease-in-out;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: iron-blink 7s infinite ease-in-out;
 }
 .eye-socket.right .eyelid {
-  animation-delay: 0.08s;
-}
-.eye-socket .eye-pupil {
-  animation: robot-scan 4.5s infinite ease-in-out;
-}
-.eye-socket.right .eye-pupil {
-  animation-delay: 0.08s;
-}
-.eye-socket .scan-beam {
-  animation: robot-scan-beam 4.5s infinite ease-in-out;
-}
-.eye-socket.right .scan-beam {
-  animation-delay: 0.08s;
+  animation-delay: 0.15s;
 }
 
-@keyframes robot-blink {
-  0%, 38%, 48%, 100% {
-    transform: scaleY(0);
-    opacity: 0;
+@keyframes iron-breathe {
+  0%, 100% {
+    filter: brightness(0.85);
+    opacity: 0.85;
   }
-  40%, 46% {
-    transform: scaleY(1);
+  50% {
+    filter: brightness(1.25);
     opacity: 1;
   }
 }
 
-@keyframes robot-scan {
-  0% {
-    transform: translateX(-12px);
-    filter: brightness(1);
+@keyframes iron-bright {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.96);
   }
-  12% {
-    transform: translateX(12px);
-    filter: brightness(1.2);
-  }
-  24% {
-    transform: translateX(-6px);
-    filter: brightness(1);
-  }
-  36% {
-    transform: translateX(6px);
-    filter: brightness(1.3);
-  }
-  40%, 46% {
-    transform: translateX(0);
-    filter: brightness(0.4);
-  }
-  48%, 100% {
-    transform: translateX(0);
-    filter: brightness(1);
+  50% {
+    opacity: 0.95;
+    transform: scale(1.02);
   }
 }
 
-@keyframes robot-scan-beam {
-  0% {
-    transform: translateY(0);
-    opacity: 0.7;
-  }
-  35% {
-    transform: translateY(78px);
-    opacity: 0.4;
-  }
-  40%, 46% {
+@keyframes iron-blink {
+  0%, 92%, 100% {
+    transform: scaleY(0);
     opacity: 0;
   }
-  48%, 100% {
-    transform: translateY(0);
-    opacity: 0.7;
+  94%, 96% {
+    transform: scaleY(1);
+    opacity: 1;
   }
 }
 

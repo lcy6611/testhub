@@ -16,15 +16,22 @@
     <span v-if="!dragging && showHint" class="hermes-dock__hint">拖动我</span>
   </div>
 
-  <!-- 右侧抽屉：Hermes 聊天窗口 -->
+  <!-- 右侧抽屉：Hermes 聊天窗口（可拖拽调整宽度） -->
   <el-drawer
     v-model="drawerVisible"
-    title="Hermes 助手"
     direction="rtl"
-    size="420px"
+    :size="drawerSize"
     :destroy-on-close="false"
+    :show-close="false"
     class="hermes-dock__drawer">
-    <HermesChatPanel compact />
+    <div class="hermes-drawer-content">
+      <div
+        class="hermes-resize-handle"
+        title="按住拖拽调整宽度"
+        @pointerdown="onResizeDown"
+      />
+      <HermesChatPanel compact closable @close="drawerVisible = false" />
+    </div>
   </el-drawer>
 </template>
 
@@ -34,6 +41,10 @@ import { useRoute } from 'vue-router'
 import HermesChatPanel from './HermesChatPanel.vue'
 
 const STORAGE_KEY = 'hermes_dock_position'
+const WIDTH_STORAGE_KEY = 'hermes_drawer_width'
+const DEFAULT_DRAWER_WIDTH = 560 // 抽屉默认宽度(px)
+const MIN_DRAWER_WIDTH = 360
+const MAX_DRAWER_WIDTH = 1200
 const SIZE = 56 // 图标直径(px)
 const MARGIN = 16 // 距视口边缘最小间距(px)
 const DRAG_THRESHOLD = 4 // 超过该位移才算拖动(否则算点击)
@@ -47,6 +58,9 @@ const dragging = ref(false)
 const moved = ref(false)
 const showHint = ref(true)
 const drawerVisible = ref(false)
+const drawerWidth = ref(DEFAULT_DRAWER_WIDTH)
+
+const drawerSize = computed(() => `${drawerWidth.value}px`)
 
 // 在登录页 / Hermes 自身页面隐藏(避免冗余)
 const visible = computed(() => {
@@ -92,6 +106,26 @@ function loadPosition() {
     // 解析失败则用默认
   }
   pos.value = defaultPosition()
+}
+
+function loadDrawerWidth() {
+  try {
+    const raw = localStorage.getItem(WIDTH_STORAGE_KEY)
+    const w = raw ? parseInt(raw, 10) : 0
+    if (w >= MIN_DRAWER_WIDTH && w <= MAX_DRAWER_WIDTH) {
+      drawerWidth.value = w
+    }
+  } catch (e) {
+    // 解析失败则用默认
+  }
+}
+
+function saveDrawerWidth() {
+  try {
+    localStorage.setItem(WIDTH_STORAGE_KEY, String(drawerWidth.value))
+  } catch (e) {
+    // 忽略写入失败
+  }
 }
 
 function savePosition() {
@@ -145,10 +179,48 @@ function onPointerUp(e) {
 function onResize() {
   // 视口变化时确保图标仍在可视范围内
   pos.value = clamp(pos.value)
+  // 同时防止抽屉宽度超出视口
+  const maxW = Math.max(MIN_DRAWER_WIDTH, window.innerWidth - 48)
+  if (drawerWidth.value > maxW) {
+    drawerWidth.value = maxW
+  }
+}
+
+// ────────── 抽屉宽度调整逻辑 ──────────
+let resizeStartX = 0
+let resizeStartWidth = DEFAULT_DRAWER_WIDTH
+let resizing = false
+
+function onResizeDown(e) {
+  if (e.button != null && e.button !== 0) return
+  resizing = true
+  resizeStartX = e.clientX
+  resizeStartWidth = drawerWidth.value
+  const handle = e.currentTarget
+  try { handle.setPointerCapture(e.pointerId) } catch {}
+  window.addEventListener('pointermove', onResizeMove)
+  window.addEventListener('pointerup', onResizeUp)
+}
+
+function onResizeMove(e) {
+  if (!resizing) return
+  // rtl 抽屉固定在右侧：鼠标往左移(clientX 变小) → 宽度增加
+  const delta = resizeStartX - e.clientX
+  const maxW = Math.min(MAX_DRAWER_WIDTH, window.innerWidth - 48)
+  drawerWidth.value = Math.max(MIN_DRAWER_WIDTH, Math.min(maxW, resizeStartWidth + delta))
+}
+
+function onResizeUp() {
+  if (!resizing) return
+  resizing = false
+  saveDrawerWidth()
+  window.removeEventListener('pointermove', onResizeMove)
+  window.removeEventListener('pointerup', onResizeUp)
 }
 
 onMounted(() => {
   loadPosition()
+  loadDrawerWidth()
   window.addEventListener('resize', onResize)
   // 5 秒后淡出"拖动我"提示
   setTimeout(() => { showHint.value = false }, 5000)
@@ -208,12 +280,50 @@ onBeforeUnmount(() => {
 }
 
 /* 抽屉内 Hermes 聊天面板铺满 */
+.hermes-dock__drawer :deep(.el-drawer__header) {
+  display: none;
+}
 .hermes-dock__drawer :deep(.el-drawer__body) {
   padding: 0;
   height: 100%;
   overflow: hidden;
 }
-.hermes-dock__drawer :deep(.el-drawer__body > .chat-panel) {
+.hermes-drawer-content {
+  position: relative;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.hermes-drawer-content > .chat-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 左侧拖拽调整宽度的把手 */
+.hermes-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.2s;
+}
+.hermes-resize-handle:hover,
+.hermes-resize-handle:active {
+  background: rgba(13, 148, 136, 0.25);
+}
+.hermes-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 48px;
+  border-radius: 2px;
+  background: rgba(13, 148, 136, 0.35);
 }
 </style>

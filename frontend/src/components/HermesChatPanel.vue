@@ -3,7 +3,15 @@
     <!-- 顶部标题栏 -->
     <div class="agent-header">
       <div class="header-left">
-        <el-icon class="header-icon"><MagicStick /></el-icon>
+        <svg class="header-robot-eyes" viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="4" width="44" height="24" rx="10" fill="rgba(255,255,255,0.22)" />
+          <circle cx="15" cy="16" r="7" fill="#fff" />
+          <circle cx="33" cy="16" r="7" fill="#fff" />
+          <circle cx="15" cy="16" r="3.5" fill="#409eff" />
+          <circle cx="33" cy="16" r="3.5" fill="#409eff" />
+          <circle cx="17" cy="14" r="1.2" fill="#fff" />
+          <circle cx="35" cy="14" r="1.2" fill="#fff" />
+        </svg>
         <div>
           <span class="header-title">Hermes 助手</span>
           <span v-if="!compact" class="header-sub">自然语言驱动测试全流程</span>
@@ -17,6 +25,7 @@
         <el-button v-if="loading" @click="stopRequest" :icon="CircleClose" type="danger" plain size="small" round>停止</el-button>
         <el-button :icon="Plus" plain size="small" @click="onNewConversation">新对话</el-button>
         <el-button @click="clearCurrentChat" :icon="Delete" plain size="small">清空</el-button>
+        <el-button v-if="closable" @click="emit('close')" :icon="Close" plain size="small" circle title="关闭" />
       </div>
     </div>
 
@@ -135,15 +144,17 @@ import { ref, nextTick, watch, onMounted, onUpdated, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   MagicStick, ChatRound, User, Tools, ArrowDown, ArrowUp,
-  Loading, Promotion, Delete, CircleClose, Plus,
+  Loading, Promotion, Delete, CircleClose, Plus, Close,
 } from '@element-plus/icons-vue'
 import { agentChat } from '@/api/agent'
 import { useHermesStore } from '@/stores/hermes'
 import * as echarts from 'echarts'
 
 const props = defineProps({
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  closable: { type: Boolean, default: false },
 })
+const emit = defineEmits(['close'])
 
 const hermesStore = useHermesStore()
 const inputText = ref('')
@@ -786,38 +797,51 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  border-bottom: none;
+  color: #fff;
 }
 .is-compact .agent-header {
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 .header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .header-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.header-icon {
-  font-size: 24px;
-  color: #409eff;
+.header-actions :deep(.el-button.is-plain) {
+  --el-button-bg-color: rgba(255, 255, 255, 0.12);
+  --el-button-border-color: rgba(255, 255, 255, 0.35);
+  --el-button-text-color: #fff;
+  --el-button-hover-text-color: #0f766e;
+  --el-button-hover-bg-color: #fff;
+  --el-button-hover-border-color: #fff;
 }
-.is-compact .header-icon {
-  font-size: 20px;
+.header-actions :deep(.el-button.is-plain.is-circle) {
+  padding: 6px;
+}
+.header-robot-eyes {
+  width: 44px;
+  height: 30px;
+  flex-shrink: 0;
 }
 .header-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   margin-right: 6px;
+  color: #fff;
 }
 .header-sub {
+  display: block;
   font-size: 12px;
-  color: #909399;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
 }
 
 .agent-messages {

@@ -39,73 +39,77 @@
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-            <radialGradient id="sclera-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="30%">
-              <stop offset="0%" stop-color="#fff8aa" />
-              <stop offset="35%" stop-color="#ffd700" />
-              <stop offset="75%" stop-color="#ff8c00" />
-              <stop offset="100%" stop-color="#b35900" />
+            <radialGradient id="sclera-gradient" cx="50%" cy="55%" r="55%" fx="40%" fy="45%">
+              <stop offset="0%" stop-color="#fffef5" />
+              <stop offset="30%" stop-color="#fff5c2" />
+              <stop offset="70%" stop-color="#ffd166" />
+              <stop offset="100%" stop-color="#e69500" />
             </radialGradient>
             <radialGradient id="iris-gradient" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#ff4d4d" />
-              <stop offset="60%" stop-color="#cc0000" />
-              <stop offset="100%" stop-color="#660000" />
+              <stop offset="0%" stop-color="#ff5e00" />
+              <stop offset="55%" stop-color="#d60000" />
+              <stop offset="100%" stop-color="#800000" />
             </radialGradient>
             <linearGradient id="eyelid-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stop-color="#0a0a0a" />
               <stop offset="100%" stop-color="#1a0505" />
             </linearGradient>
             <clipPath id="left-eye-clip">
-              <ellipse cx="86" cy="60" rx="58" ry="32" />
+              <path d="M38,74 C60,88 112,82 150,54 L148,50 C110,56 68,50 38,74 Z" />
             </clipPath>
             <clipPath id="right-eye-clip">
-              <ellipse cx="234" cy="60" rx="58" ry="32" />
+              <path d="M282,74 C260,88 208,82 170,54 L172,50 C210,56 252,50 282,74 Z" />
             </clipPath>
           </defs>
 
           <!-- 左眼眶底层（眼窝黑 + 外框） -->
           <g class="eye-socket left">
-            <ellipse class="socket-shape" cx="86" cy="60" rx="60" ry="34" />
-            <rect class="eye-dark" x="20" y="20" width="132" height="80" />
+            <path class="socket-shape" d="M36,74 C58,90 114,84 152,54 L150,48 C110,54 66,46 36,74 Z" />
+            <rect class="eye-dark" x="20" y="20" width="140" height="80" />
           </g>
           <!-- 右眼眶底层 -->
           <g class="eye-socket right">
-            <ellipse class="socket-shape" cx="234" cy="60" rx="60" ry="34" />
-            <rect class="eye-dark" x="168" y="20" width="132" height="80" />
+            <path class="socket-shape" d="M284,74 C262,90 206,84 168,54 L170,48 C210,54 254,46 284,74 Z" />
+            <rect class="eye-dark" x="160" y="20" width="140" height="80" />
           </g>
 
           <!-- 发光眼白 + 瞳孔：随鼠标注视移动 -->
           <g class="eye-gaze" :transform="'translate(' + eyeLook.x + ',' + eyeLook.y + ')'">
             <g clip-path="url(#left-eye-clip)">
-              <!-- 黄色发光眼白 -->
-              <ellipse cx="86" cy="60" rx="58" ry="32" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <!-- 战斗眼白：浅黄白发光 -->
+              <path class="sclera" d="M38,74 C60,88 112,82 150,54 L148,50 C110,56 68,50 38,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
               <!-- 红色虹膜 -->
-              <ellipse cx="86" cy="60" rx="20" ry="18" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+              <ellipse cx="96" cy="64" rx="22" ry="16" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
               <!-- 黑色竖瞳 -->
-              <ellipse cx="86" cy="60" rx="6" ry="14" fill="#000000" />
+              <ellipse cx="96" cy="64" rx="7" ry="15" fill="#000000" />
               <!-- 高光 -->
-              <ellipse cx="78" cy="48" rx="12" ry="7" fill="#ffffff" opacity="0.55" filter="url(#pupil-glow)" />
-              <circle cx="92" cy="66" r="2.5" fill="#ffffff" opacity="0.8" />
+              <ellipse cx="88" cy="56" rx="10" ry="6" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
+              <circle cx="102" cy="70" r="2.5" fill="#ffffff" opacity="0.85" />
             </g>
             <g clip-path="url(#right-eye-clip)">
-              <ellipse cx="234" cy="60" rx="58" ry="32" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
-              <ellipse cx="234" cy="60" rx="20" ry="18" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
-              <ellipse cx="234" cy="60" rx="6" ry="14" fill="#000000" />
-              <ellipse cx="226" cy="48" rx="12" ry="7" fill="#ffffff" opacity="0.55" filter="url(#pupil-glow)" />
-              <circle cx="240" cy="66" r="2.5" fill="#ffffff" opacity="0.8" />
+              <path class="sclera" d="M282,74 C260,88 208,82 170,54 L172,50 C210,56 252,50 282,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <ellipse cx="224" cy="64" rx="22" ry="16" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+              <ellipse cx="224" cy="64" rx="7" ry="15" fill="#000000" />
+              <ellipse cx="216" cy="56" rx="10" ry="6" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
+              <circle cx="230" cy="70" r="2.5" fill="#ffffff" opacity="0.85" />
             </g>
           </g>
+
+          <!-- 上眼睑红色战斗眼线 -->
+          <path class="eyeliner" d="M34,74 C58,48 112,42 154,50" fill="none" />
+          <path class="eyeliner" d="M286,74 C262,48 208,42 166,50" fill="none" />
 
           <!-- 眼皮（顶层，偶尔覆盖） -->
           <g clip-path="url(#left-eye-clip)">
-            <ellipse class="eyelid" cx="86" cy="60" rx="60" ry="34" fill="url(#eyelid-gradient)" />
+            <path class="eyelid" d="M38,74 C60,88 112,82 150,54 L148,50 C110,56 68,50 38,74 Z" fill="url(#eyelid-gradient)" />
           </g>
           <g clip-path="url(#right-eye-clip)">
-            <ellipse class="eyelid eyelid--r" cx="234" cy="60" rx="60" ry="34" fill="url(#eyelid-gradient)" />
+            <path class="eyelid eyelid--r" d="M282,74 C260,88 208,82 170,54 L172,50 C210,56 252,50 282,74 Z" fill="url(#eyelid-gradient)" />
           </g>
 
-          <!-- 眼部上方装甲阴影条 -->
-          <path class="brow-bar" d="M20,46 Q86,22 152,46 L152,52 Q86,28 20,52 Z" />
-          <path class="brow-bar" d="M168,46 Q234,22 300,46 L300,52 Q234,28 168,52 Z" />
+          <!-- 眉骨阴影 -->
+          <path class="brow-bar" d="M18,42 Q86,18 156,42 L154,48 Q86,24 20,48 Z" />
+          <path class="brow-bar" d="M302,42 Q234,18 164,42 L166,48 Q234,24 300,48 Z" />
         </svg>
       </div>
 
@@ -1009,16 +1013,16 @@ onUnmounted(() => {
   transition: filter 0.3s ease;
 }
 
-/* 觉醒之眼 */
+/* 战斗之眼 */
 .eye-socket .socket-shape {
   fill: #050505;
-  stroke: rgba(255, 140, 0, 0.28);
+  stroke: rgba(220, 0, 0, 0.45);
   stroke-width: 2;
 }
 .eye-socket .eye-dark {
   fill: #080300;
 }
-.eye-gaze ellipse[fill="url(#sclera-gradient)"] {
+.eye-gaze .sclera {
   transform-box: fill-box;
   transform-origin: center;
   animation: sclera-breathe 4s infinite ease-in-out;
@@ -1027,6 +1031,15 @@ onUnmounted(() => {
   transform-box: fill-box;
   transform-origin: center;
   animation: pupil-breathe 4s infinite ease-in-out;
+}
+/* 红色战斗眼线 */
+.eyeliner {
+  fill: none;
+  stroke: #ff1a1a;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px #ff0000) drop-shadow(0 0 10px #ff3300);
+  opacity: 0.9;
 }
 /* 眼皮：缓慢掠过的闭眼 */
 .eyelid {
@@ -1039,7 +1052,7 @@ onUnmounted(() => {
 }
 /* 眉骨阴影 */
 .brow-bar {
-  fill: rgba(0, 0, 0, 0.55);
+  fill: rgba(0, 0, 0, 0.6);
 }
 
 /* 悬停警戒：眼睛更亮 */

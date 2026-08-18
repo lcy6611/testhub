@@ -2,16 +2,71 @@
   <div class="chat-panel" :class="{ 'is-compact': compact }">
     <!-- 顶部标题栏 -->
     <div class="agent-header">
-      <div class="header-left">
-        <svg class="header-robot-eyes" viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="4" width="44" height="24" rx="10" fill="rgba(255,255,255,0.22)" />
-          <circle cx="15" cy="16" r="7" fill="#fff" />
-          <circle cx="33" cy="16" r="7" fill="#fff" />
-          <circle cx="15" cy="16" r="3.5" fill="#409eff" />
-          <circle cx="33" cy="16" r="3.5" fill="#409eff" />
-          <circle cx="17" cy="14" r="1.2" fill="#fff" />
-          <circle cx="35" cy="14" r="1.2" fill="#fff" />
+      <!-- 背景：战争机器人扫描眼 -->
+      <div class="header-bg-eyes" aria-hidden="true">
+        <svg class="bg-eyes-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="robot-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feFlood flood-color="#00f0ff" result="color" />
+              <feComposite in="color" in2="blur" operator="in" result="glow" />
+              <feMerge>
+                <feMergeNode in="glow" />
+                <feMergeNode in="glow" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <linearGradient id="eye-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#e0fffe" />
+              <stop offset="50%" stop-color="#00f0ff" />
+              <stop offset="100%" stop-color="#0099aa" />
+            </linearGradient>
+            <clipPath id="left-eye-clip">
+              <path d="M60,60 C60,35 75,22 100,22 C125,22 140,35 140,60 C140,85 125,98 100,98 C75,98 60,85 60,60 Z" />
+            </clipPath>
+            <clipPath id="right-eye-clip">
+              <path d="M180,60 C180,35 195,22 220,22 C245,22 260,35 260,60 C260,85 245,98 220,98 C195,98 180,85 180,60 Z" />
+            </clipPath>
+          </defs>
+
+          <!-- 左眼眶 -->
+          <g class="eye-socket left">
+            <path class="socket-frame" d="M55,60 C55,30 72,16 100,16 C128,16 145,30 145,60 C145,90 128,104 100,104 C72,104 55,90 55,60 Z" />
+            <path class="socket-rim" d="M52,60 C52,28 71,12 100,12 C129,12 148,28 148,60 C148,92 129,108 100,108 C71,108 52,92 52,60 Z" />
+            <g clip-path="url(#left-eye-clip)">
+              <rect class="eye-dark" x="55" y="16" width="90" height="88" />
+              <g class="eye-pupil left">
+                <circle cx="100" cy="60" r="18" fill="url(#eye-gradient)" filter="url(#robot-glow)" opacity="0.95" />
+                <circle cx="100" cy="60" r="9" fill="#fff" opacity="0.9" />
+                <circle cx="106" cy="54" r="3" fill="#fff" opacity="0.8" />
+              </g>
+              <rect class="scan-beam" x="55" y="18" width="90" height="2" fill="#fff" opacity="0.7" filter="url(#robot-glow)" />
+            </g>
+            <rect class="eyelid" x="55" y="16" width="90" height="88" fill="#063b38" />
+          </g>
+
+          <!-- 右眼眶 -->
+          <g class="eye-socket right">
+            <path class="socket-frame" d="M175,60 C175,30 192,16 220,16 C248,16 265,30 265,60 C265,90 248,104 220,104 C192,104 175,90 175,60 Z" />
+            <path class="socket-rim" d="M172,60 C172,28 191,12 220,12 C249,12 268,28 268,60 C268,92 249,108 220,108 C191,108 172,92 172,60 Z" />
+            <g clip-path="url(#right-eye-clip)">
+              <rect class="eye-dark" x="175" y="16" width="90" height="88" />
+              <g class="eye-pupil right">
+                <circle cx="220" cy="60" r="18" fill="url(#eye-gradient)" filter="url(#robot-glow)" opacity="0.95" />
+                <circle cx="220" cy="60" r="9" fill="#fff" opacity="0.9" />
+                <circle cx="226" cy="54" r="3" fill="#fff" opacity="0.8" />
+              </g>
+              <rect class="scan-beam" x="175" y="18" width="90" height="2" fill="#fff" opacity="0.7" filter="url(#robot-glow)" />
+            </g>
+            <rect class="eyelid" x="175" y="16" width="90" height="88" fill="#063b38" />
+          </g>
+
+          <!-- 中央连接装甲 -->
+          <path class="center-armor" d="M145,54 L175,54 L180,60 L175,66 L145,66 L140,60 Z" />
         </svg>
+      </div>
+
+      <div class="header-left">
         <div>
           <span class="header-title">Hermes 助手</span>
           <span v-if="!compact" class="header-sub">自然语言驱动测试全流程</span>
@@ -794,6 +849,7 @@ onUnmounted(() => {
 }
 
 .agent-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -801,16 +857,125 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
   border-bottom: none;
   color: #fff;
+  overflow: hidden;
 }
 .is-compact .agent-header {
   padding: 12px 14px;
 }
+.header-bg-eyes {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.bg-eyes-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.eye-socket .socket-frame {
+  fill: rgba(0, 0, 0, 0.35);
+}
+.eye-socket .socket-rim {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 2.5;
+}
+.eye-socket .eye-dark {
+  fill: #021c1a;
+}
+.eye-socket .center-armor {
+  fill: rgba(0, 0, 0, 0.4);
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1;
+}
+.eye-socket .eyelid {
+  transform-origin: center top;
+  animation: robot-blink 4.5s infinite ease-in-out;
+}
+.eye-socket.right .eyelid {
+  animation-delay: 0.08s;
+}
+.eye-socket .eye-pupil {
+  animation: robot-scan 4.5s infinite ease-in-out;
+}
+.eye-socket.right .eye-pupil {
+  animation-delay: 0.08s;
+}
+.eye-socket .scan-beam {
+  animation: robot-scan-beam 4.5s infinite ease-in-out;
+}
+.eye-socket.right .scan-beam {
+  animation-delay: 0.08s;
+}
+
+@keyframes robot-blink {
+  0%, 38%, 48%, 100% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  40%, 46% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes robot-scan {
+  0% {
+    transform: translateX(-12px);
+    filter: brightness(1);
+  }
+  12% {
+    transform: translateX(12px);
+    filter: brightness(1.2);
+  }
+  24% {
+    transform: translateX(-6px);
+    filter: brightness(1);
+  }
+  36% {
+    transform: translateX(6px);
+    filter: brightness(1.3);
+  }
+  40%, 46% {
+    transform: translateX(0);
+    filter: brightness(0.4);
+  }
+  48%, 100% {
+    transform: translateX(0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes robot-scan-beam {
+  0% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  35% {
+    transform: translateY(78px);
+    opacity: 0.4;
+  }
+  40%, 46% {
+    opacity: 0;
+  }
+  48%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+}
+
 .header-left {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 .header-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -825,11 +990,6 @@ onUnmounted(() => {
 }
 .header-actions :deep(.el-button.is-plain.is-circle) {
   padding: 6px;
-}
-.header-robot-eyes {
-  width: 44px;
-  height: 30px;
-  flex-shrink: 0;
 }
 .header-title {
   font-size: 17px;

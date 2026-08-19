@@ -45,6 +45,22 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
+
+        <el-tab-pane label="Hermes 助手" name="hermes">
+          <el-form label-width="120px">
+            <el-form-item label="Hermes 虚拟形象">
+              <el-switch
+                v-model="themeStore.hermesAvatarEnabled"
+                active-text="开启"
+                inactive-text="关闭"
+                @change="onHermesToggle"
+              />
+            </el-form-item>
+            <el-form-item>
+              <span class="hermes-tip">关闭后，右下角的 Hermes 助手（含眼睛表头）将不再显示。</span>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
       </el-tabs>
     </div>
   </div>
@@ -53,7 +69,23 @@
 <script setup>
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useThemeStore } from '@/stores/theme'
+import { ElMessage } from 'element-plus'
 
 const userStore = useUserStore()
+const themeStore = useThemeStore()
 const activeTab = ref('basic')
+
+function onHermesToggle(val) {
+  themeStore.setHermesAvatarEnabled(val)
+  ElMessage.success(val ? '已开启 Hermes 虚拟形象' : '已关闭 Hermes 虚拟形象')
+}
 </script>
+
+<style scoped>
+.hermes-tip {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
+</style>

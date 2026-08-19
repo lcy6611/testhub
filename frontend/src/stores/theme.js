@@ -42,6 +42,7 @@ const DEFAULT_MODE = 'light'
 const DEFAULT_PANEL_OPACITY = 0.78
 const DEFAULT_PANEL_BLUR = 12
 const DEFAULT_WALLPAPER_DIM = 0.12
+const DEFAULT_HERMES_AVATAR = true
 
 export const useThemeStore = defineStore('theme', () => {
   const mode = ref(DEFAULT_MODE) // light | dark
@@ -54,6 +55,9 @@ export const useThemeStore = defineStore('theme', () => {
   const panelBlur = ref(DEFAULT_PANEL_BLUR)
   const wallpaperDim = ref(DEFAULT_WALLPAPER_DIM)
   const transparentMode = ref(false)
+
+  // 是否启用 Hermes 虚拟形象（眼睛表头助手）
+  const hermesAvatarEnabled = ref(DEFAULT_HERMES_AVATAR)
 
   // 临时记忆「直接显示壁纸」关闭前的用户自定义值
   let lastCustomOpacity = DEFAULT_PANEL_OPACITY
@@ -73,6 +77,7 @@ export const useThemeStore = defineStore('theme', () => {
       panelBlur.value = typeof o.panelBlur === 'number' ? o.panelBlur : DEFAULT_PANEL_BLUR
       wallpaperDim.value = typeof o.wallpaperDim === 'number' ? o.wallpaperDim : DEFAULT_WALLPAPER_DIM
       transparentMode.value = !!o.transparentMode
+      hermesAvatarEnabled.value = o.hermesAvatarEnabled !== undefined ? !!o.hermesAvatarEnabled : DEFAULT_HERMES_AVATAR
       if (transparentMode.value) {
         lastCustomOpacity = typeof o.lastCustomOpacity === 'number' ? o.lastCustomOpacity : DEFAULT_PANEL_OPACITY
         lastCustomBlur = typeof o.lastCustomBlur === 'number' ? o.lastCustomBlur : DEFAULT_PANEL_BLUR
@@ -95,6 +100,7 @@ export const useThemeStore = defineStore('theme', () => {
         panelBlur: panelBlur.value,
         wallpaperDim: wallpaperDim.value,
         transparentMode: transparentMode.value,
+        hermesAvatarEnabled: hermesAvatarEnabled.value,
         lastCustomOpacity,
         lastCustomBlur,
         lastCustomDim,
@@ -165,6 +171,9 @@ export const useThemeStore = defineStore('theme', () => {
         panelBlur.value = typeof data.panelBlur === 'number' ? data.panelBlur : panelBlur.value
         wallpaperDim.value = typeof data.wallpaperDim === 'number' ? data.wallpaperDim : wallpaperDim.value
         transparentMode.value = !!data.transparentMode
+        if (data.hermes_avatar_enabled !== undefined) {
+          hermesAvatarEnabled.value = !!data.hermes_avatar_enabled
+        }
         applyTheme()
       }
     } catch (e) {
@@ -185,6 +194,7 @@ export const useThemeStore = defineStore('theme', () => {
         panelBlur: panelBlur.value,
         wallpaperDim: wallpaperDim.value,
         transparentMode: transparentMode.value,
+        hermes_avatar_enabled: hermesAvatarEnabled.value,
       })
     } catch (e) {
       /* 离线也可本地生效 */
@@ -259,6 +269,11 @@ export const useThemeStore = defineStore('theme', () => {
     applyTheme()
   }
 
+  function setHermesAvatarEnabled(v) {
+    hermesAvatarEnabled.value = !!v
+    save()
+  }
+
   function reset() {
     mode.value = DEFAULT_MODE
     primary.value = DEFAULT_PRIMARY
@@ -283,6 +298,8 @@ export const useThemeStore = defineStore('theme', () => {
     panelBlur,
     wallpaperDim,
     transparentMode,
+    hermesAvatarEnabled,
+    setHermesAvatarEnabled,
     initTheme,
     applyTheme,
     save,

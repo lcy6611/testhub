@@ -38,6 +38,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
+import { useThemeStore } from '@/stores/theme'
 import HermesChatPanel from './HermesChatPanel.vue'
 
 const STORAGE_KEY = 'hermes_dock_position'
@@ -50,6 +51,7 @@ const MARGIN = 16 // 距视口边缘最小间距(px)
 const DRAG_THRESHOLD = 4 // 超过该位移才算拖动(否则算点击)
 
 const route = useRoute()
+const themeStore = useThemeStore()
 const dockRef = ref(null)
 
 // 位置(元素左上角相对视口)，null 表示尚未初始化(用默认右下角)
@@ -62,10 +64,10 @@ const drawerWidth = ref(DEFAULT_DRAWER_WIDTH)
 
 const drawerSize = computed(() => `${drawerWidth.value}px`)
 
-// 在登录页 / Hermes 自身页面隐藏(避免冗余)
+// 在登录页 / Hermes 自身页面隐藏(避免冗余)；并受个人设置「Hermes 虚拟形象」开关控制
 const visible = computed(() => {
   const p = route.path
-  return !p.startsWith('/login') && p !== '/hermes'
+  return !p.startsWith('/login') && p !== '/hermes' && themeStore.hermesAvatarEnabled
 })
 
 const dockStyle = computed(() => {

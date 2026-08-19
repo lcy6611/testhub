@@ -281,10 +281,11 @@ onBeforeUnmount(() => {
 
 /* 抽屉内 Hermes 聊天面板铺满 */
 .hermes-dock__drawer :deep(.el-drawer__header) {
-  display: none;
+  display: none !important;
 }
 .hermes-dock__drawer :deep(.el-drawer__body) {
   padding: 0 !important;
+  margin: 0 !important;
   height: 100%;
   overflow: hidden;
 }

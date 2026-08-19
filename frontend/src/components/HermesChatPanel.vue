@@ -931,14 +931,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px 10px;
+  padding: 0 16px 10px;
   background: linear-gradient(135deg, #070708 0%, #0f0806 100%);
   border-bottom: 1px solid rgba(255, 140, 0, 0.22);
   color: #fff;
   overflow: hidden;
 }
 .is-compact .agent-header {
-  padding: 5px 14px 8px;
+  padding: 0 14px 8px;
 }
 .header-hud {
   position: absolute;

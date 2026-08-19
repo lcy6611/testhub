@@ -44,6 +44,16 @@ const DEFAULT_PANEL_BLUR = 12
 const DEFAULT_WALLPAPER_DIM = 0.12
 const DEFAULT_HERMES_AVATAR = true
 const DEFAULT_HERMES_EYE = true
+const DEFAULT_HERMES_EYE_STYLE = 'warrior'
+
+// Hermes 眼睛风格可选值
+export const HERMES_EYE_STYLES = [
+  { value: 'warrior', label: '战斗眼（橙红）' },
+  { value: 'gundam', label: '高达（红）' },
+  { value: 'awaken', label: '觉醒之眼（黄）' },
+  { value: 'ironman', label: '钢铁侠（蓝）' },
+  { value: 'hud', label: '科技 HUD（青）' },
+]
 
 export const useThemeStore = defineStore('theme', () => {
   const mode = ref(DEFAULT_MODE) // light | dark
@@ -62,6 +72,9 @@ export const useThemeStore = defineStore('theme', () => {
 
   // 是否启用 Hermes 表头眼睛特效（可独立于助手总开关）
   const hermesEyeEnabled = ref(DEFAULT_HERMES_EYE)
+
+  // Hermes 眼睛风格：warrior | gundam | awaken | ironman | hud
+  const hermesEyeStyle = ref(DEFAULT_HERMES_EYE_STYLE)
 
   // 临时记忆「直接显示壁纸」关闭前的用户自定义值
   let lastCustomOpacity = DEFAULT_PANEL_OPACITY
@@ -83,6 +96,7 @@ export const useThemeStore = defineStore('theme', () => {
       transparentMode.value = !!o.transparentMode
       hermesAvatarEnabled.value = o.hermesAvatarEnabled !== undefined ? !!o.hermesAvatarEnabled : DEFAULT_HERMES_AVATAR
       hermesEyeEnabled.value = o.hermesEyeEnabled !== undefined ? !!o.hermesEyeEnabled : DEFAULT_HERMES_EYE
+      hermesEyeStyle.value = o.hermesEyeStyle && typeof o.hermesEyeStyle === 'string' ? o.hermesEyeStyle : DEFAULT_HERMES_EYE_STYLE
       if (transparentMode.value) {
         lastCustomOpacity = typeof o.lastCustomOpacity === 'number' ? o.lastCustomOpacity : DEFAULT_PANEL_OPACITY
         lastCustomBlur = typeof o.lastCustomBlur === 'number' ? o.lastCustomBlur : DEFAULT_PANEL_BLUR
@@ -107,6 +121,7 @@ export const useThemeStore = defineStore('theme', () => {
         transparentMode: transparentMode.value,
         hermesAvatarEnabled: hermesAvatarEnabled.value,
         hermesEyeEnabled: hermesEyeEnabled.value,
+        hermesEyeStyle: hermesEyeStyle.value,
         lastCustomOpacity,
         lastCustomBlur,
         lastCustomDim,
@@ -183,6 +198,9 @@ export const useThemeStore = defineStore('theme', () => {
         if (data.hermes_eye_enabled !== undefined) {
           hermesEyeEnabled.value = !!data.hermes_eye_enabled
         }
+        if (data.hermes_eye_style && typeof data.hermes_eye_style === 'string') {
+          hermesEyeStyle.value = data.hermes_eye_style
+        }
         applyTheme()
       }
     } catch (e) {
@@ -205,6 +223,7 @@ export const useThemeStore = defineStore('theme', () => {
         transparentMode: transparentMode.value,
         hermes_avatar_enabled: hermesAvatarEnabled.value,
         hermes_eye_enabled: hermesEyeEnabled.value,
+        hermes_eye_style: hermesEyeStyle.value,
       })
     } catch (e) {
       /* 离线也可本地生效 */
@@ -289,6 +308,11 @@ export const useThemeStore = defineStore('theme', () => {
     save()
   }
 
+  function setHermesEyeStyle(v) {
+    hermesEyeStyle.value = v || DEFAULT_HERMES_EYE_STYLE
+    save()
+  }
+
   function reset() {
     mode.value = DEFAULT_MODE
     primary.value = DEFAULT_PRIMARY
@@ -315,8 +339,10 @@ export const useThemeStore = defineStore('theme', () => {
     transparentMode,
     hermesAvatarEnabled,
     hermesEyeEnabled,
+    hermesEyeStyle,
     setHermesAvatarEnabled,
     setHermesEyeEnabled,
+    setHermesEyeStyle,
     initTheme,
     applyTheme,
     save,

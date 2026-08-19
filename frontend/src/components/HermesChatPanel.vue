@@ -16,7 +16,7 @@
         <div class="hud-corner hud-bl"></div>
         <div class="hud-corner hud-br"></div>
         <div class="hud-lock" v-if="loading"></div>
-        <svg class="bg-eyes-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <svg class="bg-eyes-svg" :class="'eye-style-' + (themeStore.hermesEyeStyle || 'warrior')" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <filter id="eye-glow" x="-100%" y="-100%" width="300%" height="300%">
               <feGaussianBlur stdDeviation="6" result="blur1" />
@@ -54,6 +54,50 @@
               <stop offset="55%" stop-color="#4db4ff" />
               <stop offset="100%" stop-color="#0a4f9c" />
             </radialGradient>
+            <!-- 高达：纯白眼白 + 鲜红细长虹膜 -->
+            <radialGradient id="sclera-gundam" cx="50%" cy="55%" r="55%" fx="40%" fy="45%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="55%" stop-color="#f2f4f7" />
+              <stop offset="100%" stop-color="#c9d2dc" />
+            </radialGradient>
+            <radialGradient id="iris-gundam" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ff8a8a" />
+              <stop offset="45%" stop-color="#ff1e1e" />
+              <stop offset="100%" stop-color="#8c0000" />
+            </radialGradient>
+            <!-- 觉醒之眼：大块黄白眼白 + 红瞳 -->
+            <radialGradient id="sclera-awaken" cx="50%" cy="55%" r="55%" fx="40%" fy="45%">
+              <stop offset="0%" stop-color="#fffce8" />
+              <stop offset="40%" stop-color="#fff2b0" />
+              <stop offset="100%" stop-color="#ffb300" />
+            </radialGradient>
+            <radialGradient id="iris-awaken" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ff7a7a" />
+              <stop offset="50%" stop-color="#e60000" />
+              <stop offset="100%" stop-color="#6e0000" />
+            </radialGradient>
+            <!-- 钢铁侠：蓝白发光眼白 + 蓝虹膜 -->
+            <radialGradient id="sclera-ironman" cx="50%" cy="55%" r="55%" fx="40%" fy="45%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="50%" stop-color="#e8f6ff" />
+              <stop offset="100%" stop-color="#9fd8ff" />
+            </radialGradient>
+            <radialGradient id="iris-ironman" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#bfeaff" />
+              <stop offset="55%" stop-color="#2aa8ff" />
+              <stop offset="100%" stop-color="#064a96" />
+            </radialGradient>
+            <!-- 科技 HUD：青白眼白 + 青虹膜 -->
+            <radialGradient id="sclera-hud" cx="50%" cy="55%" r="55%" fx="40%" fy="45%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="50%" stop-color="#e6fffb" />
+              <stop offset="100%" stop-color="#8ef0e3" />
+            </radialGradient>
+            <radialGradient id="iris-hud" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#c8fff6" />
+              <stop offset="55%" stop-color="#1fe0c8" />
+              <stop offset="100%" stop-color="#067a6e" />
+            </radialGradient>
             <linearGradient id="eyelid-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stop-color="#0a0a0a" />
               <stop offset="100%" stop-color="#1a0505" />
@@ -81,10 +125,10 @@
           <g class="eye-gaze" :transform="'translate(' + eyeLook.x + ',' + eyeLook.y + ')'">
             <g clip-path="url(#left-eye-clip)">
               <!-- 战斗眼白：浅黄白发光 -->
-              <path class="sclera" d="M132,74 C98,54 58,46 18,50 C58,80 98,80 132,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <path class="sclera" d="M132,74 C98,54 58,46 18,50 C58,80 98,80 132,74 Z" :fill="scleraFill" filter="url(#eye-glow)" opacity="0.95" />
               <g class="iris-group">
                 <!-- 红色虹膜 -->
-                <ellipse cx="70" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+                <ellipse class="iris-core" cx="70" cy="63" rx="21" ry="15" :fill="irisFill" filter="url(#pupil-glow)" />
                 <!-- 黑色竖瞳 -->
                 <ellipse cx="70" cy="63" rx="6.5" ry="14" fill="#000000" />
                 <!-- 高光 -->
@@ -93,9 +137,9 @@
               </g>
             </g>
             <g clip-path="url(#right-eye-clip)">
-              <path class="sclera" d="M188,74 C222,54 262,46 302,50 C262,80 222,80 188,74 Z" fill="url(#sclera-gradient)" filter="url(#eye-glow)" opacity="0.95" />
+              <path class="sclera" d="M188,74 C222,54 262,46 302,50 C262,80 222,80 188,74 Z" :fill="scleraFill" filter="url(#eye-glow)" opacity="0.95" />
               <g class="iris-group iris-group--r">
-                <ellipse cx="250" cy="63" rx="21" ry="15" fill="url(#iris-gradient)" filter="url(#pupil-glow)" />
+                <ellipse class="iris-core" cx="250" cy="63" rx="21" ry="15" :fill="irisFill" filter="url(#pupil-glow)" />
                 <ellipse cx="250" cy="63" rx="6.5" ry="14" fill="#000000" />
                 <ellipse cx="242" cy="55" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" filter="url(#pupil-glow)" />
                 <circle cx="256" cy="69" r="2.5" fill="#ffffff" opacity="0.85" />
@@ -250,7 +294,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, watch, onMounted, onUpdated, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUpdated, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   MagicStick, ChatRound, User, Tools, ArrowDown, ArrowUp,
@@ -270,6 +314,18 @@ const emit = defineEmits(['close'])
 const hermesStore = useHermesStore()
 const themeStore = useThemeStore()
 const inputText = ref('')
+
+// 眼睛风格 → 渐变引用映射（与设置页 HERMES_EYE_STYLES 对应）
+const EYE_STYLE_MAP = {
+  warrior: { sclera: 'url(#sclera-gradient)', iris: 'url(#iris-gradient)' },
+  gundam: { sclera: 'url(#sclera-gundam)', iris: 'url(#iris-gundam)' },
+  awaken: { sclera: 'url(#sclera-awaken)', iris: 'url(#iris-awaken)' },
+  ironman: { sclera: 'url(#sclera-ironman)', iris: 'url(#iris-ironman)' },
+  hud: { sclera: 'url(#sclera-hud)', iris: 'url(#iris-hud)' },
+}
+const activeEyeStyle = computed(() => EYE_STYLE_MAP[themeStore.hermesEyeStyle] || EYE_STYLE_MAP.warrior)
+const scleraFill = computed(() => activeEyeStyle.value.sclera)
+const irisFill = computed(() => activeEyeStyle.value.iris)
 const loading = ref(false)
 const messagesRef = ref(null)
 let currentController = null
@@ -1040,12 +1096,12 @@ onUnmounted(() => {
   transform-origin: center;
   animation: sclera-breathe 4s infinite ease-in-out;
 }
-.eye-gaze ellipse[fill="url(#iris-gradient)"] {
+.eye-gaze .iris-core {
   transform-box: fill-box;
   transform-origin: center;
   animation: pupil-breathe 4s infinite ease-in-out;
 }
-/* 红色战斗眼线 */
+/* 默认红色战斗眼线（warrior） */
 .eyeliner {
   fill: none;
   stroke: #ff1a1a;
@@ -1053,6 +1109,23 @@ onUnmounted(() => {
   stroke-linecap: round;
   filter: drop-shadow(0 0 5px #ff0000) drop-shadow(0 0 10px #ff3300);
   opacity: 0.9;
+}
+/* 各风格眼线配色 */
+.eye-style-gundam .eyeliner {
+  stroke: #ff2a2a;
+  filter: drop-shadow(0 0 6px #ff0000) drop-shadow(0 0 14px #ff3030);
+}
+.eye-style-awaken .eyeliner {
+  stroke: #ffb000;
+  filter: drop-shadow(0 0 5px #ff9500) drop-shadow(0 0 12px #ffb300);
+}
+.eye-style-ironman .eyeliner {
+  stroke: #6cc6ff;
+  filter: drop-shadow(0 0 6px #2aa8ff) drop-shadow(0 0 14px #4db4ff);
+}
+.eye-style-hud .eyeliner {
+  stroke: #2ff0e0;
+  filter: drop-shadow(0 0 6px #1fe0c8) drop-shadow(0 0 14px #2ff0e0);
 }
 /* 眼皮：缓慢掠过的闭眼 */
 .eyelid {
@@ -1083,6 +1156,25 @@ onUnmounted(() => {
   fill: rgba(0, 0, 0, 0.6);
 }
 
+/* 各风格动画差异，增强辨识度 */
+/* 钢铁侠：慢摆、沉稳发光 */
+.eye-style-ironman .iris-core {
+  animation-duration: 6.5s;
+}
+/* 高达：急促脉冲、攻击性 */
+.eye-style-gundam .iris-core {
+  animation: pupil-breathe 2.4s infinite ease-in-out;
+}
+/* 科技 HUD：扫描线更明显 */
+.eye-style-hud .hud-scanline {
+  opacity: 1;
+  animation-duration: 2.6s;
+}
+/* 觉醒之眼：眼白呼吸更强 */
+.eye-style-awaken .sclera {
+  animation: sclera-breathe 3s infinite ease-in-out;
+}
+
 /* 悬停警戒：眼睛更亮 */
 .agent-header.is-hover .bg-eyes-svg {
   filter: brightness(1.22) saturate(1.2);
@@ -1091,10 +1183,8 @@ onUnmounted(() => {
   border-color: rgba(255, 180, 60, 0.95);
 }
 /* AI 思考：虹膜变浅蓝 + 急促脉冲 + 扫描加速 + 内发光 */
-.agent-header.is-alert .iris-group ellipse[fill="url(#iris-gradient)"] {
+.agent-header.is-alert .iris-core {
   fill: url(#iris-blue-gradient);
-}
-.agent-header.is-alert .eye-gaze ellipse[fill="url(#iris-gradient)"] {
   animation: alert-pupil-pulse 0.9s infinite ease-in-out;
 }
 .agent-header.is-alert .hud-scanline {

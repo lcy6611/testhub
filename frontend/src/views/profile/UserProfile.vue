@@ -68,6 +68,16 @@
                 @change="onHermesEyeToggle"
               />
             </el-form-item>
+            <el-form-item v-if="themeStore.hermesEyeEnabled" label="眼睛风格">
+              <el-select v-model="themeStore.hermesEyeStyle" style="width: 220px" @change="onHermesEyeStyleChange">
+                <el-option
+                  v-for="opt in hermesEyeStyles"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <span class="hermes-tip">关闭后，Hermes 表头的战斗眼动画将不再显示，助手窗口仍可正常使用。</span>
             </el-form-item>
@@ -81,11 +91,12 @@
 <script setup>
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { useThemeStore } from '@/stores/theme'
+import { useThemeStore, HERMES_EYE_STYLES } from '@/stores/theme'
 import { ElMessage } from 'element-plus'
 
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const hermesEyeStyles = HERMES_EYE_STYLES
 const activeTab = ref('basic')
 
 function onHermesAvatarToggle(val) {
@@ -96,6 +107,11 @@ function onHermesAvatarToggle(val) {
 function onHermesEyeToggle(val) {
   themeStore.setHermesEyeEnabled(val)
   ElMessage.success(val ? '已开启 Hermes 眼睛效果' : '已关闭 Hermes 眼睛效果')
+}
+
+function onHermesEyeStyleChange(val) {
+  themeStore.setHermesEyeStyle(val)
+  ElMessage.success('已切换眼睛风格')
 }
 </script>
 

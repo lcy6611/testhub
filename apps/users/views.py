@@ -146,7 +146,7 @@ def ui_settings_view(request):
         return Response({'error': '请求数据格式不正确'}, status=status.HTTP_400_BAD_REQUEST)
 
     current = profile.ui_settings or {}
-    allowed_keys = {'mode', 'primary', 'skin', 'wallpaper', 'wallpaperFit', 'reducedMotion', 'hermes_avatar_enabled', 'hermes_eye_enabled'}
+    allowed_keys = {'mode', 'primary', 'skin', 'wallpaper', 'wallpaperFit', 'reducedMotion', 'hermes_avatar_enabled', 'hermes_eye_enabled', 'hermes_eye_style'}
     for k, v in incoming.items():
         if k in allowed_keys:
             current[k] = v

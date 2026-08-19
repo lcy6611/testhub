@@ -23,6 +23,8 @@ media/ai_recording/*
 !media/ai_recording/.gitkeep
 media/defects/*
 !media/defects/.gitkeep
+media/replay_videos/*
+!media/replay_videos/.gitkeep
 
 # 忽略前端文件
 frontend/node_modules/

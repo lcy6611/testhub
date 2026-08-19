@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
   display: none;
 }
 .hermes-dock__drawer :deep(.el-drawer__body) {
-  padding: 0;
+  padding: 0 !important;
   height: 100%;
   overflow: hidden;
 }

@@ -49,6 +49,11 @@
               <stop offset="55%" stop-color="#d60000" />
               <stop offset="100%" stop-color="#800000" />
             </radialGradient>
+            <radialGradient id="iris-blue-gradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#bfeaff" />
+              <stop offset="55%" stop-color="#4db4ff" />
+              <stop offset="100%" stop-color="#0a4f9c" />
+            </radialGradient>
             <linearGradient id="eyelid-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stop-color="#0a0a0a" />
               <stop offset="100%" stop-color="#1a0505" />
@@ -1083,7 +1088,10 @@ onUnmounted(() => {
 .agent-header.is-hover .hud-corner {
   border-color: rgba(255, 180, 60, 0.95);
 }
-/* AI 思考：红色瞳孔急促脉冲 + 扫描加速 + 内发光 */
+/* AI 思考：虹膜变浅蓝 + 急促脉冲 + 扫描加速 + 内发光 */
+.agent-header.is-alert .iris-group ellipse[fill="url(#iris-gradient)"] {
+  fill: url(#iris-blue-gradient);
+}
 .agent-header.is-alert .eye-gaze ellipse[fill="url(#iris-gradient)"] {
   animation: alert-pupil-pulse 0.9s infinite ease-in-out;
 }
@@ -1130,8 +1138,8 @@ onUnmounted(() => {
 }
 
 @keyframes alert-pupil-pulse {
-  0%, 100% { filter: brightness(1) drop-shadow(0 0 4px #ff0000); }
-  50% { filter: brightness(2.2) drop-shadow(0 0 14px #ff3300); }
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 4px #2aa8ff); }
+  50% { filter: brightness(1.8) drop-shadow(0 0 14px #4db4ff); }
 }
 @keyframes thinking-scan {
   0% { transform: translateX(-4px); }

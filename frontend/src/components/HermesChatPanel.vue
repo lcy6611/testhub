@@ -8,7 +8,7 @@
       @mouseenter="onHeaderEnter"
       @mouseleave="onHeaderLeave">
       <!-- 背景：觉醒之眼 HUD -->
-      <div class="header-hud" aria-hidden="true">
+      <div v-if="themeStore.hermesEyeEnabled" class="header-hud" aria-hidden="true">
         <div class="hud-grid"></div>
         <div class="hud-scanline"></div>
         <div class="hud-corner hud-tl"></div>
@@ -258,6 +258,7 @@ import {
 } from '@element-plus/icons-vue'
 import { agentChat } from '@/api/agent'
 import { useHermesStore } from '@/stores/hermes'
+import { useThemeStore } from '@/stores/theme'
 import * as echarts from 'echarts'
 
 const props = defineProps({
@@ -267,6 +268,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const hermesStore = useHermesStore()
+const themeStore = useThemeStore()
 const inputText = ref('')
 const loading = ref(false)
 const messagesRef = ref(null)

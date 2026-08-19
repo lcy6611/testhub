@@ -64,7 +64,7 @@ const drawerWidth = ref(DEFAULT_DRAWER_WIDTH)
 
 const drawerSize = computed(() => `${drawerWidth.value}px`)
 
-// 在登录页 / Hermes 自身页面隐藏(避免冗余)；并受个人设置「Hermes 虚拟形象」开关控制
+// 在登录页 / Hermes 自身页面隐藏(避免冗余)；并受个人设置「Hermes 右下角图标」开关控制
 const visible = computed(() => {
   const p = route.path
   return !p.startsWith('/login') && p !== '/hermes' && themeStore.hermesAvatarEnabled

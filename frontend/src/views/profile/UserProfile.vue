@@ -50,18 +50,6 @@
           <el-form label-width="140px">
             <el-form-item label="Hermes 虚拟形象">
               <el-switch
-                v-model="themeStore.hermesAvatarEnabled"
-                active-text="开启"
-                inactive-text="关闭"
-                @change="onHermesAvatarToggle"
-              />
-            </el-form-item>
-            <el-form-item>
-              <span class="hermes-tip">关闭后，右下角的 Hermes 助手图标和聊天窗口将不再显示。</span>
-            </el-form-item>
-
-            <el-form-item label="Hermes 眼睛效果">
-              <el-switch
                 v-model="themeStore.hermesEyeEnabled"
                 active-text="开启"
                 inactive-text="关闭"
@@ -79,7 +67,19 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <span class="hermes-tip">关闭后，Hermes 表头的战斗眼动画将不再显示，助手窗口仍可正常使用。</span>
+              <span class="hermes-tip">关闭后，Hermes 表头的虚拟形象（眼睛动画）将不再显示。</span>
+            </el-form-item>
+
+            <el-form-item label="Hermes 右下角图标">
+              <el-switch
+                v-model="themeStore.hermesAvatarEnabled"
+                active-text="开启"
+                inactive-text="关闭"
+                @change="onHermesAvatarToggle"
+              />
+            </el-form-item>
+            <el-form-item>
+              <span class="hermes-tip">关闭后，右下角的 Hermes 助手入口图标将不再显示。</span>
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -101,12 +101,12 @@ const activeTab = ref('basic')
 
 function onHermesAvatarToggle(val) {
   themeStore.setHermesAvatarEnabled(val)
-  ElMessage.success(val ? '已开启 Hermes 虚拟形象' : '已关闭 Hermes 虚拟形象')
+  ElMessage.success(val ? '已开启 Hermes 右下角图标' : '已关闭 Hermes 右下角图标')
 }
 
 function onHermesEyeToggle(val) {
   themeStore.setHermesEyeEnabled(val)
-  ElMessage.success(val ? '已开启 Hermes 眼睛效果' : '已关闭 Hermes 眼睛效果')
+  ElMessage.success(val ? '已开启 Hermes 虚拟形象' : '已关闭 Hermes 虚拟形象')
 }
 
 function onHermesEyeStyleChange(val) {

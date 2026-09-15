@@ -25,6 +25,7 @@ from .models import (
 )
 from .jmx_builder import JMeterPlanBuilder, UploadedJMXPlanBuilder
 from .result_parser import parse_jtl
+from .influxdb_client import query_realtime, is_enabled as realtime_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,9 @@ def execute(execution_id: str) -> None:
             close_old_connections()
             # 每次落库前 refresh，确保 started_at / completed_at 最新
             execution.refresh_from_db()
-            return collect_execution_monitoring(execution, running=running)
+            collected = collect_execution_monitoring(execution, running=running)
+            _push_progress()
+            return collected
         except Exception as exc:
             logger.warning("监控采集异常（不阻塞）: %s", exc)
             return 0
@@ -195,10 +198,31 @@ def execute(execution_id: str) -> None:
         if _monitor_thread:
             _monitor_thread.join(timeout=max(5, (_config().prometheus_step or 15) + 5))
 
+    def _push_progress() -> None:
+        """把当前执行状态（含实时指标）推给订阅方；任何异常都不影响压测。"""
+        try:
+            execution.refresh_from_db()
+            payload: Dict[str, Any] = {
+                "execution_id": execution.pk,
+                "execution_no": execution.execution_id,
+                "status": execution.status,
+                "started_at": execution.started_at.isoformat() if execution.started_at else None,
+                "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+                "duration": execution.duration,
+                "sla_result": execution.sla_result,
+                "verdict": execution.verdict,
+            }
+            if realtime_enabled():
+                payload["realtime"] = query_realtime(execution.execution_id, window_s=60)
+            push_update(execution.pk, payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("推送执行进度失败（忽略）: %s", exc)
+
     def _fail(msg: str):
         PerformanceExecution.objects.filter(pk=execution.pk).update(
             status="FAILED", error_message=msg, completed_at=timezone.now(),
         )
+        _push_progress()
         logger.error("性能执行失败 %s: %s", execution_id, msg)
         # 失败也要把已采集到的监控数据落库，便于详情/报告展示
         _collect_monitoring(running=True)
@@ -423,6 +447,7 @@ def execute(execution_id: str) -> None:
             error_message=warn_msg,
             **verdict_fields,
         )
+        _push_progress()
         logger.info("性能执行完成 %s", execution_id)
 
     except subprocess.TimeoutExpired:
@@ -436,6 +461,28 @@ def execute(execution_id: str) -> None:
         # 任何分支退出都要保证停掉监控线程
         _stop_monitor_thread()
         close_old_connections()
+
+
+def push_update(execution_id: int, payload: Dict[str, Any]) -> None:
+    """向 WebSocket 组推送执行更新（非阻塞）。
+
+    channels / Redis 不可用时静默返回，前端会自动降级为轮询 /realtime/。
+    注意 ``type`` 必须是 ``execution.update``（channels 会转成 consumer 的
+    ``execution_update`` 方法）。
+    """
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)(
+            f"perf_execution_{execution_id}",
+            {"type": "execution.update", **payload},
+        )
+    except Exception as exc:  # noqa: BLE001  推送失败不能影响压测本身
+        logger.debug("压测 WS 推送失败（忽略）: %s", exc)
 
 
 def start_execution_background(execution_id: str) -> None:

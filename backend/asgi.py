@@ -48,11 +48,18 @@ try:
     from channels.auth import AuthMiddlewareStack
     from channels.routing import ProtocolTypeRouter, URLRouter
     from apps.app_automation import routing as app_automation_routing
+    from apps.performance_testing import routing as performance_routing
+
+    # 各模块的 WebSocket 路由在这里汇总（新增模块只需 append 一次）
+    websocket_urlpatterns = (
+        list(app_automation_routing.websocket_urlpatterns)
+        + list(performance_routing.websocket_urlpatterns)
+    )
 
     application = ProtocolTypeRouter({
         "http": mcp_aware_http_app,
         "websocket": AuthMiddlewareStack(
-            URLRouter(app_automation_routing.websocket_urlpatterns)
+            URLRouter(websocket_urlpatterns)
         ),
     })
     logger.info("ASGI 已启用 WebSocket 支持 (需通过 Daphne 或 uvicorn/daphne 启动)")

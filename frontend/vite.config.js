@@ -30,6 +30,9 @@ export default defineConfig({
         // 只代理 /api/（不能写成 /api，否则会把 /api-testing 等前端路由也误代理到后端）
         '/api/': { target, changeOrigin: true, secure: false },
         '/media/': { target, changeOrigin: true, secure: false },
+        // WebSocket：必须显式 ws: true，否则浏览器 ws:// 同源连接无法升级到后端
+        // （app-automation / performance-testing 的实时推送都挂在 /ws/ 下）
+        '/ws/': { target, changeOrigin: true, secure: false, ws: true },
       }
     })(),
     historyApiFallback: {

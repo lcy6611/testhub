@@ -5,6 +5,7 @@
       <div class="status-bar">
         <div class="status-left">
           <el-tag :type="statusType(execution.status)" size="large">{{ execution.status_display }}</el-tag>
+          <el-tag v-if="wsConnected" size="small" type="success" effect="plain">实时推送已连接</el-tag>
           <span class="exec-id">{{ execution.execution_id }}</span>
           <span class="script-name">{{ execution.script_name }}</span>
         </div>
@@ -395,6 +396,92 @@ async function copyShareUrl() {
   }
 }
 
+// ── WebSocket 实时进度（连不上/断开自动降级为既有 5s 轮询）──
+const wsConnected = ref(false)
+let ws = null
+let wsRetry = 0
+let wsPingTimer = null
+let wsRetryTimer = null
+
+const STATUS_TEXT = { QUEUED: '排队中', RUNNING: '执行中', COMPLETED: '已完成', FAILED: '失败', CANCELLED: '已取消' }
+
+function wsUrl() {
+  const token = localStorage.getItem('access_token') || ''
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${proto}://${window.location.host}/ws/perf-testing/executions/${route.params.id}/?token=${encodeURIComponent(token)}`
+}
+
+function connectWs() {
+  if (ws || !route.params.id) return
+  try {
+    ws = new WebSocket(wsUrl())
+  } catch (e) {
+    ws = null
+    return
+  }
+  ws.onopen = () => {
+    wsConnected.value = true
+    wsRetry = 0
+    if (wsPingTimer) clearInterval(wsPingTimer)
+    wsPingTimer = setInterval(() => {
+      try { ws && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ action: 'ping' })) } catch (e) { /* 忽略 */ }
+    }, 25000)
+  }
+  ws.onmessage = (ev) => {
+    let msg = null
+    try { msg = JSON.parse(ev.data) } catch (e) { return }
+    if (!msg || msg.type === 'pong' || msg.status === 'NOT_FOUND') return
+    applyWsUpdate(msg)
+  }
+  ws.onerror = () => { /* onclose 里统一处理降级 */ }
+  ws.onclose = () => {
+    wsConnected.value = false
+    ws = null
+    if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null }
+    scheduleWsRetry()
+  }
+}
+
+function scheduleWsRetry() {
+  // 仅在执行中重连：终态没有新消息，重连没意义（轮询会兜住状态刷新）
+  const st = execution.value && execution.value.status
+  if (!st || (st !== 'QUEUED' && st !== 'RUNNING')) return
+  if (wsRetryTimer) return
+  wsRetry = Math.min(wsRetry + 1, 6)
+  wsRetryTimer = setTimeout(() => {
+    wsRetryTimer = null
+    connectWs()
+  }, Math.min(1000 * 2 ** wsRetry, 30000))
+}
+
+function closeWs() {
+  if (wsPingTimer) { clearInterval(wsPingTimer); wsPingTimer = null }
+  if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null }
+  if (ws) {
+    const sock = ws
+    ws = null
+    try { sock.close() } catch (e) { /* 忽略 */ }
+  }
+  wsConnected.value = false
+}
+
+function applyWsUpdate(msg) {
+  if (!execution.value) return
+  if (msg.status) {
+    execution.value.status = msg.status
+    if (STATUS_TEXT[msg.status]) execution.value.status_display = STATUS_TEXT[msg.status]
+  }
+  if (msg.completed_at) execution.value.completed_at = msg.completed_at
+  if (msg.sla_result) execution.value.sla_result = msg.sla_result
+  if (msg.verdict) execution.value.verdict = msg.verdict
+  if (msg.realtime) realtimeData.value = msg.realtime
+  // 进入终态：拉一次完整详情（summary/metrics/判定/基线），并断开推送
+  if (msg.status && msg.status !== 'QUEUED' && msg.status !== 'RUNNING') {
+    closeWs()
+    loadAll()
+  }
+}
+
 async function handleSetBaseline() {
   baselineSaving.value = true
   try {
@@ -638,6 +725,12 @@ const loadAll = async () => {
         summary.value = sumRes.data
       } catch (e) { /* 可能还没生成 */ }
     }
+    // 执行中才建立 WebSocket（终态没有增量，交给轮询/一次性加载即可）
+    if (execRes.data.status === 'QUEUED' || execRes.data.status === 'RUNNING') {
+      connectWs()
+    } else {
+      closeWs()
+    }
     // 基线对比：无基线时后端返回 has_baseline=false，前端展示引导文案
     await loadBaselineCompare()
     // 实时数据：运行中始终刷新，未启用 InfluxDB 时回退到 JTL 实时解析
@@ -671,6 +764,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
   stopMonitoringPoll()
+  closeWs()
 })
 </script>
 

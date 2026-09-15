@@ -119,6 +119,7 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
     # 这两个是数据字段，get_*_display 需显式声明；status_display 用的是 source 写法
     sla_result_display = serializers.CharField(source="get_sla_result_display", read_only=True)
     verdict_display = serializers.CharField(source="get_verdict_display", read_only=True)
+    share_enabled = serializers.BooleanField(read_only=True)
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
     has_report = serializers.SerializerMethodField()
     has_jtl = serializers.SerializerMethodField()
@@ -150,6 +151,8 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "verdict",
             "verdict_display",
             "verdict_details",
+            "share_enabled",
+            "share_expires_at",
             "started_at",
             "completed_at",
             "created_by",
@@ -170,6 +173,8 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "sla_detail",
             "verdict",
             "verdict_details",
+            "share_token",
+            "share_expires_at",
             "started_at",
             "completed_at",
             "created_at",

@@ -9,6 +9,7 @@
           <span class="script-name">{{ execution.script_name }}</span>
         </div>
         <div class="status-right">
+          <el-button v-if="execution.has_report" size="small" @click="openShareDialog">分享报告</el-button>
           <el-button
             v-if="execution.status === 'COMPLETED'"
             size="small"
@@ -213,6 +214,35 @@
     </el-card>
 
     <!-- 时间线弹窗 -->
+    <!-- 分享报告弹窗 -->
+    <el-dialog v-model="shareVisible" title="分享报告" width="620px">
+      <div class="share-tip">
+        分享链接为<strong>公开只读</strong>，任何人凭链接即可查看该次压测的 HTML 报告，无需登录。
+      </div>
+      <el-form label-width="90px" style="margin-top: 12px">
+        <el-form-item label="有效期">
+          <el-select v-model="shareExpires" style="width: 200px">
+            <el-option label="永不过期" :value="0" />
+            <el-option label="1 天" :value="1" />
+            <el-option label="7 天" :value="7" />
+            <el-option label="30 天" :value="30" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div v-if="shareUrl" class="share-url-row">
+        <el-input :model-value="shareUrl" readonly />
+        <el-button type="primary" @click="copyShareUrl">复制链接</el-button>
+      </div>
+      <div v-if="shareExpiresAt" class="share-expire">过期时间：{{ formatTime(shareExpiresAt) }}</div>
+      <template #footer>
+        <el-button @click="shareVisible = false">关闭</el-button>
+        <el-button v-if="shareUrl" type="danger" plain :loading="shareBusy" @click="handleRevokeShare">撤销链接</el-button>
+        <el-button type="primary" :loading="shareBusy" @click="handleGenerateShare">
+          {{ shareUrl ? '重新生成' : '生成链接' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="timelineDialogVisible" :title="`时间线 - ${currentMetric?.sample_label}`" width="700px">
       <div v-if="currentMetric?.timeline?.length" class="timeline-chart">
         <div v-for="(point, idx) in currentMetric.timeline" :key="idx" class="timeline-bar-group">
@@ -234,7 +264,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { getExecution, getExecutionSummary, getExecutionMetrics, getRealtimeData, regenerateExecutionReport, getExecutionReport, getExecutionMonitoring, compareBaseline, setBaselineFromExecution } from '@/api/performance'
+import { getExecution, getExecutionSummary, getExecutionMetrics, getRealtimeData, regenerateExecutionReport, getExecutionReport, getExecutionMonitoring, compareBaseline, setBaselineFromExecution, shareExecutionLink, revokeExecutionShareLink } from '@/api/performance'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent])
 
@@ -311,6 +341,57 @@ async function loadBaselineCompare() {
     baselineCmp.value = res.data
   } catch (e) {
     baselineCmp.value = null
+  }
+}
+
+// ── 报告分享直链 ──
+const shareVisible = ref(false)
+const shareBusy = ref(false)
+const shareExpires = ref(7)
+const shareUrl = ref('')
+const shareExpiresAt = ref(null)
+
+function openShareDialog() {
+  shareVisible.value = true
+}
+
+async function handleGenerateShare() {
+  shareBusy.value = true
+  try {
+    const res = await shareExecutionLink(route.params.id, { expires_in_days: shareExpires.value })
+    // 优先用相对路径 + 当前站点 origin 拼绝对地址：后端 build_absolute_uri 拿到的是
+    // Vite 代理改写后的内部 Host（backend:8000），直接给用户会不可达。
+    const path = res.data.share_path || ''
+    shareUrl.value = path ? `${window.location.origin}${path}` : (res.data.share_url || '')
+    shareExpiresAt.value = res.data.expires_at || null
+    ElMessage.success('分享链接已生成')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error || '生成分享链接失败')
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function handleRevokeShare() {
+  shareBusy.value = true
+  try {
+    await revokeExecutionShareLink(route.params.id)
+    shareUrl.value = ''
+    shareExpiresAt.value = null
+    ElMessage.success('分享链接已撤销')
+  } catch (e) {
+    ElMessage.error('撤销失败')
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function copyShareUrl() {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+    ElMessage.success('链接已复制')
+  } catch (e) {
+    ElMessage.warning('复制失败，请手动选中复制')
   }
 }
 
@@ -628,4 +709,7 @@ onUnmounted(() => {
 .verdict-head { display: flex; align-items: center; gap: 8px; }
 .verdict-title { font-size: 15px; font-weight: 600; color: #303133; margin-right: 8px; }
 .baseline-note { font-size: 12px; color: #909399; margin-left: 8px; }
+.share-tip { font-size: 13px; color: #606266; line-height: 1.6; }
+.share-url-row { display: flex; gap: 8px; margin-top: 4px; }
+.share-expire { font-size: 12px; color: #909399; margin-top: 8px; }
 </style>

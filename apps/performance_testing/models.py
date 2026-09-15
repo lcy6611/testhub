@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+import secrets
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class PerformanceScript(models.Model):
@@ -197,6 +201,12 @@ class PerformanceExecution(models.Model):
     )
     verdict_details = models.JSONField(default=list, blank=True, verbose_name="验收明细")
 
+    # 报告分享直链：token 即凭证，可在无登录态下只读打开报告
+    share_token = models.CharField(
+        max_length=64, blank=True, null=True, unique=True, verbose_name="分享令牌"
+    )
+    share_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="分享过期时间")
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         verbose_name="创建者",
@@ -211,6 +221,33 @@ class PerformanceExecution(models.Model):
 
     def __str__(self):
         return f"{self.execution_id} ({self.get_status_display()})"
+
+    # ---------- 报告分享直链 ----------
+    @property
+    def share_enabled(self) -> bool:
+        """分享是否仍然有效（有 token 且未过期）。"""
+        if not self.share_token:
+            return False
+        if self.share_expires_at and self.share_expires_at < timezone.now():
+            return False
+        return True
+
+    def generate_share_token(self, expires_in_days=None):
+        """生成/重置分享令牌。``expires_in_days`` 为 None 或 <=0 表示永不过期。"""
+        self.share_token = secrets.token_urlsafe(32)
+        try:
+            days = int(expires_in_days) if expires_in_days not in (None, "") else 0
+        except (TypeError, ValueError):
+            days = 0
+        self.share_expires_at = timezone.now() + timedelta(days=days) if days > 0 else None
+        self.save(update_fields=["share_token", "share_expires_at"])
+        return self.share_token
+
+    def revoke_share_token(self):
+        """撤销分享令牌。"""
+        self.share_token = None
+        self.share_expires_at = None
+        self.save(update_fields=["share_token", "share_expires_at"])
 
 
 class PerformanceSummary(models.Model):

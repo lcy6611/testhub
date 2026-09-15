@@ -242,3 +242,13 @@ export function createComparisonReport(data) {
 export function deleteComparisonReport(id) {
   return request({ url: `/performance-testing/comparison-reports/${id}/`, method: 'delete' })
 }
+
+// ==================== 报告分享直链 ====================
+
+export function shareExecutionLink(id, data) {
+  return request({ url: `/performance-testing/executions/${id}/share-link/`, method: 'post', data })
+}
+
+export function revokeExecutionShareLink(id) {
+  return request({ url: `/performance-testing/executions/${id}/revoke-share-link/`, method: 'post' })
+}

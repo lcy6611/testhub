@@ -14,6 +14,8 @@ from .views import (
     PerformanceBatchExecutionViewSet,
     PerformanceBaselineViewSet,
     PerformanceComparisonReportViewSet,
+    SharedReportView,
+    SharedReportFileView,
 )
 
 router = DefaultRouter()
@@ -28,5 +30,8 @@ router.register(r"baselines", PerformanceBaselineViewSet, basename="perf-baselin
 router.register(r"comparison-reports", PerformanceComparisonReportViewSet, basename="perf-comparison-report")
 
 urlpatterns = [
+    # 报告分享直链：公开只读，凭 share_token 访问（无需登录）
+    path("shared/<str:token>/report/", SharedReportView.as_view(), name="perf-shared-report"),
+    path("shared/<str:token>/report_file/", SharedReportFileView.as_view(), name="perf-shared-report-file"),
     path("", include(router.urls)),
 ]

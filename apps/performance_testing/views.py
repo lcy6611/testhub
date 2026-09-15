@@ -14,8 +14,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
@@ -456,6 +457,44 @@ class PerformanceExecutionViewSet(viewsets.ModelViewSet):
             content_type="application/octet-stream",
             filename=f"{execution.execution_id}.jmx",
         )
+
+    @action(detail=True, methods=["post"], url_path="share-link")
+    def share_link(self, request, pk=None):
+        """生成/重置报告分享直链。expires_in_days 为空或 <=0 表示永不过期。"""
+        execution = self.get_object()
+        if execution.status != "COMPLETED":
+            return Response({"error": "压测尚未完成，请等待执行结束后再分享报告"},
+                            status=status.HTTP_400_BAD_REQUEST)
+        report_index = os.path.join(execution.report_path, "index.html") if execution.report_path else ""
+        if not report_index or not os.path.exists(report_index):
+            return Response({"error": "报告尚未生成，无法分享"}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw = request.data.get("expires_in_days", None)
+        if raw not in (None, "", "null"):
+            try:
+                expires_in_days = int(raw)
+            except (TypeError, ValueError):
+                return Response({"error": "expires_in_days 必须是整数(天)"},
+                                status=status.HTTP_400_BAD_REQUEST)
+        else:
+            expires_in_days = None
+
+        token = execution.generate_share_token(expires_in_days)
+        share_path = f"/api/performance-testing/shared/{token}/report/"
+        return Response({
+            "share_token": token,
+            "share_url": request.build_absolute_uri(share_path),
+            "share_path": share_path,
+            "expires_at": execution.share_expires_at,
+            "share_enabled": execution.share_enabled,
+        })
+
+    @action(detail=True, methods=["post"], url_path="revoke-share-link")
+    def revoke_share_link(self, request, pk=None):
+        """撤销报告分享直链。"""
+        execution = self.get_object()
+        execution.revoke_share_token()
+        return Response({"success": True})
 
     @action(detail=True, methods=["post"])
     def regenerate_report(self, request, pk=None):
@@ -928,24 +967,33 @@ def _resolve_relative_path(rel: str, current_path: str = "") -> str:
     return resolved.replace("\\", "/")
 
 
-def _report_file_api_url(execution_id: str, rel_path: str, current_path: str = "", token: str = "") -> str:
-    """生成 report_file API 的绝对 URL。"""
+def _report_file_api_url(execution_id: str, rel_path: str, current_path: str = "",
+                         token: str = "", base: str = "") -> str:
+    """生成 report_file API 的路径。
+
+    ``base`` 为空时用登录态接口（``/api/performance-testing/executions/<id>/report_file/``）；
+    传入 base 时用公开分享接口（``/api/performance-testing/shared/<share_token>/report_file/``），
+    此时 ``token`` 不再拼进 query（share token 已在路径里）。
+    """
     resolved = _resolve_relative_path(rel_path, current_path)
     from urllib.parse import quote
+    if base:
+        return f"{base}?path={quote(resolved, safe='')}"
     url = f"/api/performance-testing/executions/{execution_id}/report_file/?path={quote(resolved, safe='')}"
     if token:
         url += f"&token={quote(token, safe='')}"
     return url
 
 
-def _rewrite_html_report_paths(html: str, execution_id: str, current_path: str = "", token: str = "") -> str:
+def _rewrite_html_report_paths(html: str, execution_id: str, current_path: str = "",
+                               token: str = "", base: str = "") -> str:
     """改写 HTML 报告中的相对资源路径，使其通过 report_file API 加载。"""
 
     def _replace_attr(match) -> str:
         value = match.group(3)
         if _is_absolute_url(value):
             return match.group(0)
-        new_value = _report_file_api_url(execution_id, value, current_path, token)
+        new_value = _report_file_api_url(execution_id, value, current_path, token, base)
         quote_char = match.group(2)
         return f"{match.group(1)}{quote_char}{new_value}{quote_char}"
 
@@ -967,7 +1015,8 @@ def _rewrite_html_report_paths(html: str, execution_id: str, current_path: str =
     return html
 
 
-def _rewrite_css_report_paths(css: str, execution_id: str, current_path: str, token: str = "") -> str:
+def _rewrite_css_report_paths(css: str, execution_id: str, current_path: str, token: str = "",
+                              base: str = "") -> str:
     """改写 CSS 中的相对 url(...) 路径，使其通过 report_file API 加载。"""
 
     def _replace_url(match) -> str:
@@ -975,7 +1024,7 @@ def _rewrite_css_report_paths(css: str, execution_id: str, current_path: str, to
         value = match.group(2)
         if _is_absolute_url(value):
             return match.group(0)
-        new_value = _report_file_api_url(execution_id, value, current_path, token)
+        new_value = _report_file_api_url(execution_id, value, current_path, token, base)
         if quote_char:
             return f"url({quote_char}{new_value}{quote_char})"
         return f"url({new_value})"
@@ -1176,3 +1225,86 @@ class PerformanceComparisonReportViewSet(viewsets.ModelViewSet):
             created_by=request.user,
         )
         return Response(self.get_serializer(report).data, status=status.HTTP_201_CREATED)
+
+
+# ====================================================================== #
+# 报告分享直链（公开只读，凭 share_token 访问，无需登录）
+# ====================================================================== #
+class SharedReportView(APIView):
+    """公开只读：按 share_token 返回 HTML 报告，资源路径指向公开资产端点。"""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        execution = _resolve_shared_execution(token)
+        report_index = os.path.join(execution.report_path, "index.html") if execution.report_path else ""
+        if not report_index or not os.path.exists(report_index):
+            raise Http404("HTML 报告尚未生成")
+        with open(report_index, "r", encoding="utf-8", errors="ignore") as f:
+            html = f.read()
+        base = f"/api/performance-testing/shared/{token}/report_file/"
+        html = _rewrite_html_report_paths(html, execution.execution_id, base=base)
+        return Response({
+            "html": html,
+            "size": len(html),
+            "execution_id": execution.execution_id,
+            "script_name": execution.script.name if execution.script else "",
+            "shared": True,
+        })
+
+
+class SharedReportFileView(APIView):
+    """公开只读：分享报告的静态资源（HTML/CSS 内部相对路径改写为公开路径）。"""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        execution = _resolve_shared_execution(token)
+        if not execution.report_path:
+            raise Http404("报告目录不存在")
+        rel_path = request.query_params.get("path", "").split("?")[0]
+        rel_path = rel_path.replace("..", "").lstrip("/\\")
+        target = os.path.join(execution.report_path, rel_path)
+        if not os.path.abspath(target).startswith(os.path.abspath(execution.report_path)):
+            raise Http404("非法路径")
+        if not os.path.exists(target) or os.path.isdir(target):
+            raise Http404("文件不存在")
+
+        base = f"/api/performance-testing/shared/{token}/report_file/"
+        ext = os.path.splitext(target)[1].lower()
+        if ext in (".html", ".htm", ".css"):
+            content_type = {".html": "text/html", ".htm": "text/html", ".css": "text/css"}[ext]
+            with open(target, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            if ext in (".html", ".htm"):
+                content = _rewrite_html_report_paths(content, execution.execution_id, rel_path, base=base)
+            else:
+                content = _rewrite_css_report_paths(content, execution.execution_id, rel_path, base=base)
+            return HttpResponse(content, content_type=content_type)
+
+        ext_map = {
+            ".js": "application/javascript",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".svg": "image/svg+xml",
+            ".woff": "font/woff",
+            ".woff2": "font/woff2",
+            ".ttf": "font/ttf",
+            ".ico": "image/x-icon",
+        }
+        return FileResponse(
+            open(target, "rb"),
+            content_type=ext_map.get(ext, "application/octet-stream"),
+        )
+
+
+def _resolve_shared_execution(token: str):
+    """按 share_token 解析执行并校验有效期；无效/过期统一 404。"""
+    execution = PerformanceExecution.objects.filter(share_token=token).select_related("script").first()
+    if not execution or not execution.share_enabled:
+        raise Http404("分享链接无效或已过期")
+    return execution

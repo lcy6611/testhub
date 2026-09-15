@@ -206,3 +206,21 @@ export function createBatchExecution(data) {
 export function getBatchSummary(id) {
   return request({ url: `/performance-testing/batch-executions/${id}/summary/`, method: 'get' })
 }
+
+// ==================== 性能基线 ====================
+
+export function getBaselines(params) {
+  return request({ url: '/performance-testing/baselines/', method: 'get', params })
+}
+
+export function setBaselineFromExecution(data) {
+  return request({ url: '/performance-testing/baselines/set-from-execution/', method: 'post', data })
+}
+
+export function compareBaseline(executionId) {
+  return request({ url: '/performance-testing/baselines/compare/', method: 'get', params: { execution_id: executionId } })
+}
+
+export function deleteBaseline(id) {
+  return request({ url: `/performance-testing/baselines/${id}/`, method: 'delete' })
+}

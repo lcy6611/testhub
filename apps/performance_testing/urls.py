@@ -12,6 +12,7 @@ from .views import (
     PerformanceScheduledTaskViewSet,
     PerformanceConfigViewSet,
     PerformanceBatchExecutionViewSet,
+    PerformanceBaselineViewSet,
 )
 
 router = DefaultRouter()
@@ -22,6 +23,7 @@ router.register(r"dashboard", PerformanceDashboardViewSet, basename="perf-dashbo
 router.register(r"reports", PerformanceReportViewSet, basename="perf-report")
 router.register(r"scheduled-tasks", PerformanceScheduledTaskViewSet, basename="perf-scheduled-task")
 router.register(r"config", PerformanceConfigViewSet, basename="perf-config")
+router.register(r"baselines", PerformanceBaselineViewSet, basename="perf-baseline")
 
 urlpatterns = [
     path("", include(router.urls)),

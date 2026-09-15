@@ -9,6 +9,12 @@
           <span class="script-name">{{ execution.script_name }}</span>
         </div>
         <div class="status-right">
+          <el-button
+            v-if="execution.status === 'COMPLETED'"
+            size="small"
+            :loading="baselineSaving"
+            @click="handleSetBaseline"
+          >设为基线</el-button>
           <el-button v-if="execution.has_jtl" size="small" @click="handleDownload('jtl')">下载 JTL</el-button>
           <el-button v-if="execution.jmx_path" size="small" @click="handleDownload('jmx')">下载 JMX</el-button>
           <el-button @click="$router.push('/performance-testing/executions')">返回列表</el-button>
@@ -65,6 +71,45 @@
               </el-table-column>
             </el-table>
             <el-empty v-else description="该脚本未配置 SLA 阈值 / 验收目标，本次未评估" :image-size="60" />
+          </div>
+
+          <!-- 基线对比：与脚本已设置的基线比对，判断是否劣化 -->
+          <div class="verdict-block" v-if="execution && baselineCmp">
+            <div class="verdict-head">
+              <span class="verdict-title">基线对比</span>
+              <template v-if="baselineCmp.has_baseline">
+                <el-tag :type="baselineCmp.degraded ? 'danger' : 'success'" size="small">
+                  {{ baselineCmp.degraded ? '性能劣化' : '无劣化' }}
+                </el-tag>
+                <span class="baseline-note">基线来源：{{ baselineCmp.baseline_execution_id || '-' }}</span>
+              </template>
+              <el-tag v-else type="info" size="small">该脚本尚未设置基线</el-tag>
+            </div>
+            <el-table :data="baselineCmp.items || []" size="small" stripe v-if="(baselineCmp.items || []).length" style="margin-top: 10px">
+              <el-table-column prop="label" label="指标" min-width="140" />
+              <el-table-column prop="baseline" label="基线值" width="110" align="center" />
+              <el-table-column prop="current" label="本次值" width="110" align="center" />
+              <el-table-column label="变化" width="110" align="center">
+                <template #default="{ row }">
+                  <span :style="{ color: row.degraded ? '#f56c6c' : (row.change_pct > 0 ? '#e6a23c' : '#67c23a') }">
+                    {{ row.change_pct > 0 ? '+' : '' }}{{ row.change_pct }}%
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="tolerance_pct" label="容忍度(%)" width="110" align="center" />
+              <el-table-column label="结论" width="100" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.degraded ? 'danger' : 'success'" size="small">
+                    {{ row.degraded ? '劣化' : '正常' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty
+              v-else
+              description="暂无基线对比数据；点右上角「设为基线」后，后续执行会以此为基准判断劣化"
+              :image-size="60"
+            />
           </div>
         </el-tab-pane>
 
@@ -189,7 +234,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { getExecution, getExecutionSummary, getExecutionMetrics, getRealtimeData, regenerateExecutionReport, getExecutionReport, getExecutionMonitoring } from '@/api/performance'
+import { getExecution, getExecutionSummary, getExecutionMetrics, getRealtimeData, regenerateExecutionReport, getExecutionReport, getExecutionMonitoring, compareBaseline, setBaselineFromExecution } from '@/api/performance'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent])
 
@@ -254,6 +299,33 @@ const judgeRows = computed(() => {
   }
   return rows
 })
+
+// ── 性能基线对比 ──
+const baselineCmp = ref(null)
+const baselineSaving = ref(false)
+
+async function loadBaselineCompare() {
+  if (!route.params.id) return
+  try {
+    const res = await compareBaseline(route.params.id)
+    baselineCmp.value = res.data
+  } catch (e) {
+    baselineCmp.value = null
+  }
+}
+
+async function handleSetBaseline() {
+  baselineSaving.value = true
+  try {
+    await setBaselineFromExecution({ execution_id: route.params.id })
+    ElMessage.success('已设为该脚本的性能基线')
+    await loadBaselineCompare()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error || '设置基线失败')
+  } finally {
+    baselineSaving.value = false
+  }
+}
 
 const summaryCards = computed(() => {
   if (!summary.value) return []
@@ -485,6 +557,8 @@ const loadAll = async () => {
         summary.value = sumRes.data
       } catch (e) { /* 可能还没生成 */ }
     }
+    // 基线对比：无基线时后端返回 has_baseline=false，前端展示引导文案
+    await loadBaselineCompare()
     // 实时数据：运行中始终刷新，未启用 InfluxDB 时回退到 JTL 实时解析
     if (execRes.data.status === 'RUNNING' || execRes.data.status === 'COMPLETED') {
       try {
@@ -553,4 +627,5 @@ onUnmounted(() => {
 .verdict-block { margin-top: 20px; border-top: 1px solid #ebeef5; padding-top: 16px; }
 .verdict-head { display: flex; align-items: center; gap: 8px; }
 .verdict-title { font-size: 15px; font-weight: 600; color: #303133; margin-right: 8px; }
+.baseline-note { font-size: 12px; color: #909399; margin-left: 8px; }
 </style>

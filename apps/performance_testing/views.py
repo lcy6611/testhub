@@ -10,7 +10,8 @@ import requests
 
 from django.conf import settings
 from django.http import HttpResponse, FileResponse, Http404
-from rest_framework import status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -37,6 +38,7 @@ from .models import (
     PerformanceScheduledTask,
     PerformanceConfig,
     PerformanceBatchExecution,
+    PerformanceBaseline,
 )
 from .serializers import (
     PerformanceScriptSerializer,
@@ -51,10 +53,12 @@ from .serializers import (
     PerformanceConfigSerializer,
     PerformanceBatchExecutionSerializer,
     BatchExecutionCreateSerializer,
+    PerformanceBaselineSerializer,
 )
 from .executor import create_execution, validate_load, create_batch_execution
 from .influxdb_client import query_realtime, is_enabled as realtime_enabled
 from .jmx_builder import detect_dangerous_components, JMeterPlanBuilder, parse_jmx_to_config
+from . import baseline as baseline_service
 
 logger = logging.getLogger(__name__)
 
@@ -1046,3 +1050,74 @@ def _convert_api_request_to_sampler(ar) -> dict:
         "body": body,
         "assertions": jmx_assertions,
     }
+
+
+class PerformanceBaselineViewSet(viewsets.ModelViewSet):
+    """性能基线：每个脚本一条当前基线，支持从执行设置为基线与劣化比对。"""
+
+    queryset = PerformanceBaseline.objects.all().select_related("script", "execution", "set_by")
+    serializer_class = PerformanceBaselineSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["script"]
+    ordering_fields = ["created_at", "updated_at"]
+
+    def perform_create(self, serializer):
+        serializer.save(set_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(set_by=self.request.user)
+
+    @action(detail=False, methods=["post"], url_path="set-from-execution")
+    def set_from_execution(self, request):
+        """把某次已完成的执行结果设为该脚本的性能基线（同脚本覆盖）。"""
+        execution_id = request.data.get("execution_id")
+        if not execution_id:
+            return Response({"error": "缺少 execution_id"}, status=status.HTTP_400_BAD_REQUEST)
+        execution = PerformanceExecution.objects.filter(pk=execution_id).select_related("script").first()
+        if not execution:
+            return Response({"error": "执行记录不存在"}, status=status.HTTP_404_NOT_FOUND)
+        if execution.status != "COMPLETED":
+            return Response({"error": "只有正常完成的执行才能作为基线"}, status=status.HTTP_400_BAD_REQUEST)
+
+        summary = getattr(execution, "summary", None)
+        metrics = baseline_service.summary_to_metrics(summary)
+        if not metrics:
+            return Response({"error": "该执行没有汇总数据，无法作为基线"}, status=status.HTTP_400_BAD_REQUEST)
+
+        baseline, _created = PerformanceBaseline.objects.update_or_create(
+            script=execution.script,
+            defaults={
+                "execution": execution,
+                "metrics": metrics,
+                "tolerance": request.data.get("tolerance") or PerformanceBaseline.DEFAULT_TOLERANCE,
+                "note": request.data.get("note", ""),
+                "set_by": request.user,
+            },
+        )
+        return Response(PerformanceBaselineSerializer(baseline).data)
+
+    @action(detail=False, methods=["get"])
+    def compare(self, request):
+        """执行 vs 基线：判断是否劣化。"""
+        execution_id = request.query_params.get("execution_id")
+        if not execution_id:
+            return Response({"error": "缺少 execution_id"}, status=status.HTTP_400_BAD_REQUEST)
+        execution = PerformanceExecution.objects.filter(pk=execution_id).select_related("script").first()
+        if not execution:
+            return Response({"error": "执行记录不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+        baseline = PerformanceBaseline.objects.filter(script=execution.script).first()
+        if not baseline:
+            return Response({"has_baseline": False, "degraded": False, "items": []})
+
+        current = baseline_service.summary_to_metrics(getattr(execution, "summary", None))
+        degraded, items = baseline_service.compare(baseline.metrics, current, baseline.tolerance)
+        return Response({
+            "has_baseline": True,
+            "baseline_execution_id": baseline.execution.execution_id if baseline.execution else "",
+            "baseline_created_at": baseline.created_at,
+            "tolerance": baseline_service.merge_tolerance(baseline.tolerance),
+            "degraded": degraded,
+            "items": items,
+        })

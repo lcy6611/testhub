@@ -410,3 +410,41 @@ class PerformanceMonitorMetric(models.Model):
 
     def __str__(self):
         return f"{self.target_name}/{self.metric_label}"
+
+
+class PerformanceBaseline(models.Model):
+    """性能基线：每个脚本维护一条「当前基线」，用于历史对比与劣化判定。
+
+    设置基线即覆盖（update_or_create），基线来源执行仍可在 ``execution`` 上追溯。
+    """
+
+    #: 默认容忍度：响应时间劣化超过 20% / 吞吐量下降超过 15% 视为劣化
+    DEFAULT_TOLERANCE = {"rt_degrade_pct": 20, "tps_degrade_pct": 15}
+
+    script = models.OneToOneField(
+        PerformanceScript, on_delete=models.CASCADE, related_name="baseline", verbose_name="脚本"
+    )
+    execution = models.ForeignKey(
+        PerformanceExecution, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="baselines", verbose_name="基线来源执行",
+    )
+    metrics = models.JSONField(default=dict, blank=True, verbose_name="基线指标快照")
+    tolerance = models.JSONField(
+        default=dict, blank=True, verbose_name="容忍度(JSON:{rt_degrade_pct,tps_degrade_pct})"
+    )
+    note = models.TextField(blank=True, default="", verbose_name="备注")
+    set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="perf_baselines", verbose_name="设置人",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "perf_baseline"
+        verbose_name = "性能基线"
+        verbose_name_plural = "性能基线"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"脚本 {self.script_id} 的性能基线"

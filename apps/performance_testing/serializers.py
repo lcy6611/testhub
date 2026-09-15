@@ -15,6 +15,7 @@ from .models import (
     PerformanceConfig,
     PerformanceBatchExecution,
     PerformanceMonitorMetric,
+    PerformanceBaseline,
 )
 
 
@@ -317,3 +318,49 @@ class BatchExecutionCreateSerializer(serializers.Serializer):
     ramp_up = serializers.IntegerField(required=False, min_value=0)
     duration = serializers.IntegerField(required=False, min_value=1)
     realtime_enabled = serializers.BooleanField(required=False)
+
+
+class PerformanceBaselineSerializer(serializers.ModelSerializer):
+    """性能基线。"""
+
+    script_name = serializers.CharField(source="script.name", read_only=True)
+    execution_id = serializers.CharField(source="execution.execution_id", read_only=True)
+    set_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PerformanceBaseline
+        fields = [
+            "id",
+            "script",
+            "script_name",
+            "execution",
+            "execution_id",
+            "metrics",
+            "tolerance",
+            "note",
+            "set_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_set_by_name(self, obj):
+        return obj.set_by.username if obj.set_by else ""
+
+    def validate_tolerance(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("容忍度必须是对象")
+        for key in ("rt_degrade_pct", "tps_degrade_pct"):
+            raw = value.get(key)
+            if raw in (None, ""):
+                continue
+            try:
+                num = float(raw)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f"{key} 必须是数字")
+            if not 0 <= num <= 1000:
+                raise serializers.ValidationError(f"{key} 应在 0~1000 之间")
+            value[key] = num
+        return value

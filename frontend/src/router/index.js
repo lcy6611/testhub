@@ -834,6 +834,51 @@ const routes = [
       }
     ]
   },
+  // 智能评分器（Rubric 评分标准 + 规则引擎 + 批量评分 + 数值知识库），后端 /api/llm-judge/
+  {
+    path: '/llm-judge',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: 'dashboard' },
+      {
+        path: 'dashboard',
+        name: 'JudgeDashboard',
+        component: () => import('@/views/llm-judge/Dashboard.vue'),
+        meta: { requiresAuth: true, title: '数据看板' }
+      },
+      {
+        path: 'single',
+        name: 'JudgeSingle',
+        component: () => import('@/views/llm-judge/SingleJudge.vue'),
+        meta: { requiresAuth: true, title: '单条评分' }
+      },
+      {
+        path: 'batch',
+        name: 'JudgeBatch',
+        component: () => import('@/views/llm-judge/BatchJudge.vue'),
+        meta: { requiresAuth: true, title: '批量评分' }
+      },
+      {
+        path: 'history',
+        name: 'JudgeHistory',
+        component: () => import('@/views/llm-judge/HistoryList.vue'),
+        meta: { requiresAuth: true, title: '评分历史' }
+      },
+      {
+        path: 'rubrics',
+        name: 'JudgeRubrics',
+        component: () => import('@/views/llm-judge/RubricList.vue'),
+        meta: { requiresAuth: true, title: '评分标准' }
+      },
+      {
+        path: 'knowledge',
+        name: 'JudgeKnowledgeBase',
+        component: () => import('@/views/llm-judge/KnowledgeBase.vue'),
+        meta: { requiresAuth: true, title: '数值知识库' }
+      }
+    ]
+  },
   // 缺陷管理(开源对比)：照搬开源 defects，独立 app_label / defects_oss_* 表，后端 /api/defects-oss/
   {
     path: '/defects_oss',

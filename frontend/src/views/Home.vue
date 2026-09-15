@@ -139,6 +139,15 @@
           <h3>MCP 控制台</h3>
           <p>工具目录、危险操作审批闸、调用日志与接入配置</p>
         </div>
+
+        <!-- 智能评分器 -->
+        <div class="nav-card" @click="handleNavigate('llm-judge')" role="button" tabindex="0">
+          <div class="card-icon judge-icon">
+            <el-icon><DataBoard /></el-icon>
+          </div>
+          <h3>智能评分器</h3>
+          <p>Rubric 评分标准、规则引擎门禁、单条/批量评分与数值知识库</p>
+        </div>
       </div>
     </div>
   </div>
@@ -186,7 +195,8 @@ const handleNavigate = (type) => {
     'ops-tools': '/ops-tools/text2sql',
     'ai-eval': '/ai-eval/dashboard',
     'defects': '/defects',
-    'mcp': '/mcp/console'
+    'mcp': '/mcp/console',
+    'llm-judge': '/llm-judge/dashboard'
   }
 
   if (routes[type]) {
@@ -379,6 +389,11 @@ const handleNavigate = (type) => {
   &.defects-icon {
     background: #fef0f0;
     color: #f56c6c;
+  }
+
+  &.judge-icon {
+    background: #fffbe6;
+    color: #faad14;
   }
 }
 

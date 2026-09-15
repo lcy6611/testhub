@@ -461,6 +461,34 @@
               <span>MCP 控制台</span>
             </el-menu-item>
           </template>
+
+          <!-- 智能评分器模块菜单 -->
+          <template v-else-if="currentModule === 'llm-judge'">
+            <el-menu-item index="/llm-judge/dashboard">
+              <el-icon><Odometer /></el-icon>
+              <span>数据看板</span>
+            </el-menu-item>
+            <el-menu-item index="/llm-judge/single">
+              <el-icon><Check /></el-icon>
+              <span>单条评分</span>
+            </el-menu-item>
+            <el-menu-item index="/llm-judge/batch">
+              <el-icon><Files /></el-icon>
+              <span>批量评分</span>
+            </el-menu-item>
+            <el-menu-item index="/llm-judge/history">
+              <el-icon><Timer /></el-icon>
+              <span>评分历史</span>
+            </el-menu-item>
+            <el-menu-item index="/llm-judge/rubrics">
+              <el-icon><Collection /></el-icon>
+              <span>评分标准</span>
+            </el-menu-item>
+            <el-menu-item index="/llm-judge/knowledge">
+              <el-icon><DataBoard /></el-icon>
+              <span>数值知识库</span>
+            </el-menu-item>
+          </template>
         </el-menu>
 
         <!-- Hermes 数字人形象（仅在 Hermes 模块显示；位于 el-menu 之下，高度自适应不溢出） -->
@@ -620,6 +648,7 @@ const currentModule = computed(() => {
   if (route.path.startsWith('/monitor')) return 'monitor'
   if (route.path.startsWith('/defects_oss')) return 'defects_oss'
   if (route.path.startsWith('/mcp')) return 'mcp'
+  if (route.path.startsWith('/llm-judge')) return 'llm-judge'
   return ''
 })
 
@@ -638,7 +667,8 @@ const moduleName = computed(() => {
     'docs': '文档中心',
     'monitor': '监控中心',
     'defects_oss': '问题管理(开源对比)',
-    'mcp': 'MCP 控制台'
+    'mcp': 'MCP 控制台',
+    'llm-judge': '智能评分器'
   }
   return map[currentModule.value] || ''
 })
@@ -775,6 +805,15 @@ const breadcrumbTitle = computed(() => {
     '/defects_oss': '问题管理(开源对比)',
     '/mcp': 'MCP 控制台',
     '/mcp/console': 'MCP 控制台',
+
+    // 智能评分器
+    '/llm-judge': '智能评分器',
+    '/llm-judge/dashboard': '数据看板',
+    '/llm-judge/single': '单条评分',
+    '/llm-judge/batch': '批量评分',
+    '/llm-judge/history': '评分历史',
+    '/llm-judge/rubrics': '评分标准',
+    '/llm-judge/knowledge': '数值知识库',
 
     '/profile': '个人设置'
   }

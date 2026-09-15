@@ -82,6 +82,7 @@ LOCAL_APPS = [
     'apps.docs',  # 文档中心（纯文件驱动，扫描磁盘 Markdown）
     'apps.monitor',  # 监控中心（探测 + 告警 + Django-Q2 周期调度）
     'apps.mcp',  # MCP 控制台（工具目录 + 危险操作审批闸 + 调用日志 + 连接配置）
+    'apps.llm_judge',  # 智能评分器（Rubric 评分标准 + 规则引擎 + 批量评分 + 数值知识库）
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -161,6 +162,20 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# ===== 智能评分器（apps.llm_judge）LLM 与评分配置 =====
+# 与开源版对齐；未配置 OPENAI_API_KEY 时可开 JUDGE_MOCK=1 走离线模拟评分
+OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
+OPENAI_BASE_URL = env('OPENAI_BASE_URL', default=None)
+JUDGE_MODEL = env('JUDGE_MODEL', default='deepseek-chat')
+JUDGE_MOCK = env('JUDGE_MOCK', default=False, cast=lambda v: str(v).lower() in ('1', 'true', 'yes'))
+JUDGE_N_RUNS = env('JUDGE_N_RUNS', default=3, cast=int)
+JUDGE_CACHE_TIMEOUT = env('JUDGE_CACHE_TIMEOUT', default=3600, cast=int)
+JUDGE_RULE_LLM_FALLBACK = env('JUDGE_RULE_LLM_FALLBACK', default=False, cast=lambda v: str(v).lower() in ('1', 'true', 'yes'))
+JUDGE_RUBRIC_DIR = os.path.join(MEDIA_ROOT, 'judge_rubrics')
+JUDGE_KB_DIR = os.path.join(MEDIA_ROOT, 'judge_kb')
+os.makedirs(JUDGE_RUBRIC_DIR, exist_ok=True)
+os.makedirs(JUDGE_KB_DIR, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

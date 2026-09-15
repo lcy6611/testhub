@@ -46,6 +46,7 @@ urlpatterns = [
     path('api/docs/', include('apps.docs.urls')),
     path('api/monitor/', include('apps.monitor.urls')),
     path('api/mcp/', include('apps.mcp.urls')),
+    path('api/llm-judge/', include('apps.llm_judge.urls')),
 ]
 
 # APP自动化 Template 目录静态访问

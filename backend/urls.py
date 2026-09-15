@@ -41,7 +41,11 @@ urlpatterns = [
     path('api/scheduler/', include('apps.scheduler.urls')),
     path('api/ops-tools/', include('apps.ops_tools.urls')),
     path('api/defects/', include('apps.defects.urls')),
+    path('api/defects-oss/', include('apps.defects_oss.urls')),
     path('api/ai-eval/', include('apps.ai_eval.urls')),
+    path('api/docs/', include('apps.docs.urls')),
+    path('api/monitor/', include('apps.monitor.urls')),
+    path('api/mcp/', include('apps.mcp.urls')),
 ]
 
 # APP自动化 Template 目录静态访问

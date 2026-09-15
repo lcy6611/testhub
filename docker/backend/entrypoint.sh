@@ -25,7 +25,8 @@ if command -v Xvfb >/dev/null 2>&1; then
 fi
 
 echo "Ensuring database driver packages are available ..."
-pip install --no-cache-dir SQLAlchemy==2.0.51 pymysql==1.1.0 cryptography==41.0.7 >/tmp/pip_db_drivers.log 2>&1 || echo "db driver install warning, see /tmp/pip_db_drivers.log"
+# 注：cryptography 不锁版本，避免覆盖 daphne/pyopenssl 所需的新版本
+pip install --no-cache-dir SQLAlchemy==2.0.51 pymysql==1.1.0 cryptography >/tmp/pip_db_drivers.log 2>&1 || echo "db driver install warning, see /tmp/pip_db_drivers.log"
 
 echo "Waiting for MySQL at ${DB_HOST:-127.0.0.1}:${DB_PORT:-3306} ..."
 python - <<'PY'
@@ -60,6 +61,20 @@ python manage.py migrate --noinput
 if [ "$#" -gt 0 ]; then
   echo "Starting Django with custom command: $*"
   exec "$@"
+fi
+
+# --------------------------------------------------------------------------- #
+# 启动方式：默认用 Daphne（ASGI）启动，以同时支持 MCP 协议端点与 WebSocket；
+# 设置 USE_DAPHNE=false 回退到 runserver（仅 HTTP，MCP 协议端点由 DRF 兜底）。
+# daphne 未安装时自动回退 runserver，保证服务可起。
+# --------------------------------------------------------------------------- #
+if [ "${USE_DAPHNE:-true}" = "true" ] && command -v daphne >/dev/null 2>&1; then
+  echo "Starting Daphne (ASGI) on 0.0.0.0:8000 (MCP 协议端点 + WebSocket 已启用) ..."
+  exec daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+fi
+
+if [ "${USE_DAPHNE:-true}" = "true" ]; then
+  echo "WARNING: USE_DAPHNE=true 但 daphne 未安装，回退到 runserver（MCP 协议端点不可用）"
 fi
 
 echo "Starting Django dev server (auto-reload enabled)..."

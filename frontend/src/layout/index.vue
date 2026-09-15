@@ -402,6 +402,65 @@
               <span>AI 评测中心</span>
             </el-menu-item>
           </template>
+
+          <!-- 文档中心模块菜单 -->
+          <template v-else-if="currentModule === 'docs'">
+            <el-menu-item index="/docs">
+              <el-icon><Document /></el-icon>
+              <span>文档中心</span>
+            </el-menu-item>
+          </template>
+
+          <!-- 监控中心模块菜单 -->
+          <template v-else-if="currentModule === 'monitor'">
+            <el-menu-item index="/monitor/dashboard">
+              <el-icon><Odometer /></el-icon>
+              <span>监控看板</span>
+            </el-menu-item>
+            <el-menu-item index="/monitor/targets">
+              <el-icon><Monitor /></el-icon>
+              <span>监控目标</span>
+            </el-menu-item>
+            <el-menu-item index="/monitor/checks">
+              <el-icon><Clock /></el-icon>
+              <span>探测历史</span>
+            </el-menu-item>
+            <el-menu-item index="/monitor/alerts">
+              <el-icon><Bell /></el-icon>
+              <span>告警记录</span>
+            </el-menu-item>
+            <el-menu-item index="/monitor/channels">
+              <el-icon><Connection /></el-icon>
+              <span>通知渠道</span>
+            </el-menu-item>
+          </template>
+
+          <template v-else-if="currentModule === 'defects_oss'">
+            <el-menu-item index="/defects_oss/dashboard">
+              <el-icon><Odometer /></el-icon>
+              <span>缺陷看板</span>
+            </el-menu-item>
+            <el-menu-item index="/defects_oss/list">
+              <el-icon><List /></el-icon>
+              <span>缺陷列表</span>
+            </el-menu-item>
+            <el-menu-item index="/defects_oss/create">
+              <el-icon><Plus /></el-icon>
+              <span>新建缺陷</span>
+            </el-menu-item>
+            <el-menu-item index="/defects_oss/reports">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>缺陷报表</span>
+            </el-menu-item>
+          </template>
+
+          <!-- MCP 控制台模块菜单 -->
+          <template v-else-if="currentModule === 'mcp'">
+            <el-menu-item index="/mcp/console">
+              <el-icon><Connection /></el-icon>
+              <span>MCP 控制台</span>
+            </el-menu-item>
+          </template>
         </el-menu>
 
         <!-- Hermes 数字人形象（仅在 Hermes 模块显示；位于 el-menu 之下，高度自适应不溢出） -->
@@ -487,7 +546,7 @@ import {
   Monitor, Folder, Document, Flag, Check, Collection, VideoPlay,
   DataAnalysis, ChatDotRound, DocumentCopy, Link, MagicStick,
   Odometer, Timer, Setting, AlarmClock, Bell, Aim, Edit, Cpu, DataLine, Files,
-  Reading, HomeFilled, DataBoard, Warning
+  Reading, HomeFilled, DataBoard, Warning, Connection
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -557,6 +616,10 @@ const currentModule = computed(() => {
   if (route.path.startsWith('/performance-testing')) return 'performance-testing'
   if (route.path.startsWith('/ops-tools')) return 'ops-tools'
   if (route.path.startsWith('/ai-eval')) return 'ai-eval'
+  if (route.path.startsWith('/docs')) return 'docs'
+  if (route.path.startsWith('/monitor')) return 'monitor'
+  if (route.path.startsWith('/defects_oss')) return 'defects_oss'
+  if (route.path.startsWith('/mcp')) return 'mcp'
   return ''
 })
 
@@ -571,7 +634,11 @@ const moduleName = computed(() => {
     'configuration': '配置中心',
     'performance-testing': '性能测试',
     'ops-tools': '运维工具',
-    'ai-eval': 'AI 评测'
+    'ai-eval': 'AI 评测',
+    'docs': '文档中心',
+    'monitor': '监控中心',
+    'defects_oss': '问题管理(开源对比)',
+    'mcp': 'MCP 控制台'
   }
   return map[currentModule.value] || ''
 })
@@ -692,6 +759,22 @@ const breadcrumbTitle = computed(() => {
     '/ops-tools/files': '内网文件传输',
 
     '/ai-eval/dashboard': 'AI 评测中心',
+
+    // 文档中心
+    '/docs': '文档中心',
+
+    // 监控中心
+    '/monitor': '监控中心',
+    '/monitor/dashboard': '监控看板',
+    '/monitor/targets': '监控目标',
+    '/monitor/checks': '探测历史',
+    '/monitor/alerts': '告警记录',
+    '/monitor/channels': '通知渠道',
+
+    // 问题管理(开源对比)
+    '/defects_oss': '问题管理(开源对比)',
+    '/mcp': 'MCP 控制台',
+    '/mcp/console': 'MCP 控制台',
 
     '/profile': '个人设置'
   }

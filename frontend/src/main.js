@@ -10,6 +10,7 @@ import { useThemeStore } from '@/stores/theme'
 
 import App from './App.vue'
 import router from './router'
+import i18n from '@/locales'
 import './assets/css/global.scss'
 
 // Axios aÃ¥ÂÂºÃ§Â½Â®
@@ -49,6 +50,7 @@ async function init() {
   }
 
   app.use(router)
+  app.use(i18n)
   app.use(ElementPlus, {
     locale: zhCn,
   })

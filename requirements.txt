@@ -1,20 +1,20 @@
 allure-pytest==2.15.0
 allure-python-commons==2.15.0
 amqp==5.3.1
-anyio==4.9.0
+anyio>=4.0.0
 asgiref==3.9.1
 attrs==25.3.0
 billiard==4.2.1
 celery==5.3.4
 certifi==2025.7.14
-cffi==1.17.1
+cffi>=2.0.0
 charset-normalizer==3.4.2
 click==8.2.1
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
 croniter==6.0.0
-cryptography==41.0.7
+cryptography>=42.0.0
 Django==4.2.7
 django-cors-headers==4.3.1
 django-filter==23.5
@@ -24,7 +24,7 @@ django-picklefield==3.4.0
 drf-spectacular==0.27.0
 paramiko==5.0.0
 SQLAlchemy==2.0.51
-psutil==6.1.1
+psutil>=5.9.0
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
@@ -92,6 +92,12 @@ pycryptodome==3.21.0
 # 对齐 channels-redis>=4.3 的要求：channels>=4.2.2
 channels==4.2.2
 channels-redis==4.3.0
+
+# MCP 控制台协议层（FastMCP streamable-http + Daphne ASGI 网关）
+# 仅需锁定顶层 mcp / daphne；其余（starlette/pydantic/twisted/autobahn 等）
+# 由 pip 依据既有 anyio/psutil 等锁定版本一并解析，避免版本冲突
+mcp==1.25.0
+daphne==4.2.1
 
 # APP自动化执行依赖（Airtest + OCR）
 airtest==1.4.3

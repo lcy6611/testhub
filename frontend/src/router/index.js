@@ -360,6 +360,24 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/defects/kanban',
+    name: 'DefectKanban',
+    component: () => import('@/views/defects/DefectKanbanView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/defects/stats',
+    name: 'DefectStats',
+    component: () => import('@/views/defects/DefectStatsView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/defects/:id',
+    name: 'DefectDetail',
+    component: () => import('@/views/defects/DefectDetailView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/ai-intelligent-mode',
     component: Layout,
     meta: { requiresAuth: true },
@@ -746,6 +764,89 @@ const routes = [
         name: 'AIEval',
         component: () => import('@/views/ai-eval/AIEvalCenter.vue')
       }
+    ]
+  },
+  // 文档中心（扫描磁盘 Markdown，纯文件驱动）
+  {
+    path: '/docs',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'DocCenter',
+        component: () => import('@/views/docs/DocCenterView.vue'),
+        meta: { requiresAuth: true, title: '文档中心' }
+      }
+    ]
+  },
+  // 监控中心（探测 + 告警 + 通知渠道，后端 /api/monitor/，定期由 Django-Q2 调度）
+  {
+    path: '/monitor',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: 'dashboard' },
+      {
+        path: 'dashboard',
+        name: 'MonitorDashboard',
+        component: () => import('@/views/monitor/Dashboard.vue'),
+        meta: { requiresAuth: true, title: '监控看板' }
+      },
+      {
+        path: 'targets',
+        name: 'MonitorTargets',
+        component: () => import('@/views/monitor/MonitorTargets.vue'),
+        meta: { requiresAuth: true, title: '监控目标' }
+      },
+      {
+        path: 'checks',
+        name: 'MonitorChecks',
+        component: () => import('@/views/monitor/CheckLogs.vue'),
+        meta: { requiresAuth: true, title: '探测历史' }
+      },
+      {
+        path: 'alerts',
+        name: 'MonitorAlerts',
+        component: () => import('@/views/monitor/Alerts.vue'),
+        meta: { requiresAuth: true, title: '告警记录' }
+      },
+      {
+        path: 'channels',
+        name: 'MonitorChannels',
+        component: () => import('@/views/monitor/NotificationChannels.vue'),
+        meta: { requiresAuth: true, title: '通知渠道' }
+      }
+    ]
+  },
+  // MCP 控制台（工具目录 + 危险操作审批闸 + 调用日志 + 连接配置），后端 /api/mcp/
+  {
+    path: '/mcp',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: 'console' },
+      {
+        path: 'console',
+        name: 'McpConsole',
+        component: () => import('@/views/mcp/McpConsole.vue'),
+        meta: { requiresAuth: true, title: 'MCP 控制台' }
+      }
+    ]
+  },
+  // 缺陷管理(开源对比)：照搬开源 defects，独立 app_label / defects_oss_* 表，后端 /api/defects-oss/
+  {
+    path: '/defects_oss',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: 'dashboard' },
+      { path: 'dashboard', name: 'DefectsOssDashboard', component: () => import('@/views/defects_oss/DefectDashboard.vue'), meta: { requiresAuth: true, title: '缺陷看板' } },
+      { path: 'list', name: 'DefectsOssList', component: () => import('@/views/defects_oss/DefectList.vue'), meta: { requiresAuth: true, title: '缺陷列表' } },
+      { path: 'create', name: 'DefectsOssCreate', component: () => import('@/views/defects_oss/DefectForm.vue'), meta: { requiresAuth: true, title: '新建缺陷' } },
+      { path: 'reports', name: 'DefectsOssReport', component: () => import('@/views/defects_oss/DefectReport.vue'), meta: { requiresAuth: true, title: '缺陷报表' } },
+      { path: ':id', name: 'DefectsOssDetail', component: () => import('@/views/defects_oss/DefectDetail.vue'), meta: { requiresAuth: true, title: '缺陷详情' } },
+      { path: ':id/edit', name: 'DefectsOssEdit', component: () => import('@/views/defects_oss/DefectForm.vue'), meta: { requiresAuth: true, title: '编辑缺陷' } }
     ]
   },
   // ====== 知识中枢（2026-07-24 v3.1：下沉为配置中心的二级折叠子菜单）======

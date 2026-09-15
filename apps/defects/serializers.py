@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Defect, DefectAttachment, ReleaseConclusion
+from .models import Defect, DefectAttachment, DefectTransitionLog, DefectComment, ReleaseConclusion
 
 
 class DefectAttachmentSerializer(serializers.ModelSerializer):
@@ -32,20 +32,59 @@ class DefectAttachmentSerializer(serializers.ModelSerializer):
         return url
 
 
+class DefectTransitionLogSerializer(serializers.ModelSerializer):
+    """缺陷流转历史序列化器。"""
+    operator_name = serializers.CharField(source='operator.username', read_only=True, default='')
+    target_user_name = serializers.CharField(source='target_user.username', read_only=True, default='')
+    from_status_display = serializers.CharField(source='get_from_status_display', read_only=True, default='')
+    to_status_display = serializers.CharField(source='get_to_status_display', read_only=True, default='')
+
+    class Meta:
+        model = DefectTransitionLog
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at']
+
+
+class DefectCommentSerializer(serializers.ModelSerializer):
+    """缺陷评论序列化器。"""
+    author_name = serializers.CharField(source='author.username', read_only=True, default='')
+    author_avatar = serializers.CharField(source='author.avatar', read_only=True, default='')
+
+    class Meta:
+        model = DefectComment
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'author']
+
+
 class DefectSerializer(serializers.ModelSerializer):
-    """缺陷序列化器（嵌套附件）。"""
+    """缺陷序列化器（嵌套附件/评论/流转历史）。"""
     attachments = DefectAttachmentSerializer(many=True, read_only=True)
+    comments = DefectCommentSerializer(many=True, read_only=True)
+    transition_logs = DefectTransitionLogSerializer(many=True, read_only=True)
+
     severity_display = serializers.CharField(source='get_severity_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    defect_type_display = serializers.CharField(source='get_defect_type_display', read_only=True)
+    source_display = serializers.CharField(source='get_source_display', read_only=True, default='')
+
     project_name = serializers.CharField(source='project.name', read_only=True, default='')
+    version_name = serializers.CharField(source='version.name', read_only=True, default='')
     reported_by_name = serializers.CharField(source='reported_by.username', read_only=True, default='')
     assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True, default='')
+    verifier_name = serializers.CharField(source='verifier.username', read_only=True, default='')
+    resolver_name = serializers.CharField(source='resolver.username', read_only=True, default='')
+
+    requirement_id = serializers.PrimaryKeyRelatedField(source='requirement', read_only=True, allow_null=True)
+    requirement_title = serializers.CharField(source='requirement.title', read_only=True, default='')
+    test_run_id = serializers.PrimaryKeyRelatedField(source='test_run', read_only=True, allow_null=True)
+    related_testcase_id = serializers.PrimaryKeyRelatedField(source='related_testcase', read_only=True, allow_null=True)
+    related_testcase_title = serializers.CharField(source='related_testcase.title', read_only=True, default='')
 
     class Meta:
         model = Defect
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at', 'reported_by']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'reported_by', 'bug_code', 'resolved_at', 'closed_at']
 
 
 class ReleaseConclusionSerializer(serializers.ModelSerializer):

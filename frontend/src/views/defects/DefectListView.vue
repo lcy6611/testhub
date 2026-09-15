@@ -6,6 +6,12 @@
         问题管理
       </h1>
       <div class="header-actions">
+        <el-button @click="$router.push('/defects/kanban')">
+          <el-icon><Grid /></el-icon> 看板
+        </el-button>
+        <el-button @click="$router.push('/defects/stats')">
+          <el-icon><DataAnalysis /></el-icon> 统计
+        </el-button>
         <el-button type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
           新建 BUG
@@ -129,7 +135,7 @@
       </el-table-column>
       <el-table-column prop="title" label="标题" min-width="320">
         <template #default="{ row }">
-          <el-link type="primary" underline="never" @click="openEditDialog(row)">
+          <el-link type="primary" underline="never" @click="goDetail(row)">
             {{ row.title }}
           </el-link>
         </template>
@@ -256,6 +262,70 @@
             <el-radio value="ai">AI 分析</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="优先级">
+              <el-select v-model="form.priority" style="width:100%">
+                <el-option v-for="s in priorityOptions" :key="s.value" :label="s.label" :value="s.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="缺陷类型">
+              <el-select v-model="form.defect_type" style="width:100%">
+                <el-option v-for="s in typeOptions" :key="s.value" :label="s.label" :value="s.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="发现版本">
+              <el-select v-model="form.version" filterable clearable style="width:100%" placeholder="选择版本">
+                <el-option v-for="v in versions" :key="v.id" :label="v.name" :value="v.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="所属模块">
+              <el-input v-model="form.module" placeholder="如：登录模块" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="处理人">
+              <el-select v-model="form.resolver" filterable clearable style="width:100%">
+                <el-option v-for="u in users" :key="u.id" :label="u.username" :value="u.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="验证人">
+              <el-select v-model="form.verifier" filterable clearable style="width:100%">
+                <el-option v-for="u in users" :key="u.id" :label="u.username" :value="u.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="关联用例">
+          <el-select v-model="form.related_testcase" filterable clearable style="width:100%" placeholder="选择关联测试用例">
+            <el-option v-for="t in testcases" :key="t.id" :label="`#${t.id} ${t.title}`" :value="t.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="期望修复">
+          <el-date-picker v-model="form.due_at" type="datetime" placeholder="期望修复时间" style="width:100%" value-format="YYYY-MM-DDTHH:mm:ss" />
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="预期结果">
+              <el-input v-model="form.expected_result" type="textarea" :rows="2" placeholder="预期结果" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="实际结果">
+              <el-input v-model="form.actual_result" type="textarea" :rows="2" placeholder="实际结果" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="附件">
           <el-upload
             v-if="editing"
@@ -317,17 +387,18 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Warning, Plus, Search, Document, Upload, Delete, ArrowDown } from '@element-plus/icons-vue'
+import { Warning, Plus, Search, Document, Upload, Delete, ArrowDown, Grid, DataAnalysis } from '@element-plus/icons-vue'
 import {
   getDefects, getDefect, createDefect, patchDefect, deleteDefect,
-  uploadDefectAttachment, deleteDefectAttachment
+  uploadDefectAttachment, deleteDefectAttachment, transitionDefect
 } from '@/api/defects'
 import { getProjects } from '@/api/performance'
 import request from '@/utils/api'
 
 const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -337,6 +408,8 @@ const page = ref(1)
 const pageSize = ref(20)
 const projects = ref([])
 const users = ref([])
+const versions = ref([])
+const testcases = ref([])
 
 const filterProject = ref(null)
 const filterStatus = ref(null)
@@ -356,6 +429,21 @@ const severityOptions = [
   { value: 'S3', label: '一般' },
   { value: 'S4', label: '轻微' }
 ]
+const priorityOptions = [
+  { value: 'P0', label: 'P0-紧急' },
+  { value: 'P1', label: 'P1-高' },
+  { value: 'P2', label: 'P2-中' },
+  { value: 'P3', label: 'P3-低' }
+]
+const typeOptions = [
+  { value: 'functional', label: '功能缺陷' },
+  { value: 'ui', label: '界面缺陷' },
+  { value: 'compatibility', label: '兼容性缺陷' },
+  { value: 'performance', label: '性能缺陷' },
+  { value: 'security', label: '安全缺陷' },
+  { value: 'data', label: '数据缺陷' },
+  { value: 'other', label: '其他' }
+]
 
 const dialogVisible = ref(false)
 const editing = ref(null)
@@ -369,6 +457,16 @@ const form = reactive({
   steps_to_reproduce: '',
   environment: '',
   source: 'manual',
+  priority: 'P2',
+  defect_type: 'functional',
+  version: null,
+  module: '',
+  resolver: null,
+  verifier: null,
+  related_testcase: null,
+  due_at: null,
+  expected_result: '',
+  actual_result: '',
   attachments: []
 })
 
@@ -444,16 +542,38 @@ const loadUsers = async () => {
   }
 }
 
+const loadVersions = async (projectId) => {
+  if (!projectId) { versions.value = []; return }
+  try {
+    const res = await request.get('/versions/', { params: { projects: projectId, page_size: 200 } })
+    const data = res.data || res
+    versions.value = data.results || data || []
+  } catch (e) { versions.value = [] }
+}
+const loadTestcases = async (projectId) => {
+  if (!projectId) { testcases.value = []; return }
+  try {
+    const res = await request.get('/testcases/', { params: { project: projectId, page_size: 200 } })
+    const data = res.data || res
+    testcases.value = data.results || data || []
+  } catch (e) { testcases.value = [] }
+}
+
 const openCreateDialog = () => {
   editing.value = null
   Object.assign(form, {
     title: '', project: filterProject.value || (projects.value[0]?.id ?? null),
     severity: 'S3', status: 'open', assigned_to: null,
     description: '', steps_to_reproduce: '', environment: '',
-    source: 'manual', attachments: []
+    source: 'manual', priority: 'P2', defect_type: 'functional',
+    version: null, module: '', resolver: null, verifier: null,
+    related_testcase: null, due_at: null, expected_result: '', actual_result: '',
+    attachments: []
   })
   // 默认带入所选项目的默认环境
   applyProjectEnvironment(form.project)
+  loadVersions(form.project)
+  loadTestcases(form.project)
   dialogVisible.value = true
 }
 
@@ -486,17 +606,7 @@ const createDraftAndUpload = async () => {
   }
   saving.value = true
   try {
-    const res = await createDefect({
-      title: form.title,
-      project: form.project,
-      severity: form.severity,
-      status: form.status,
-      assigned_to: form.assigned_to || null,
-      description: form.description,
-      steps_to_reproduce: form.steps_to_reproduce,
-      environment: form.environment,
-      source: form.source
-    })
+    const res = await createDefect(buildPayload())
     const created = res.data || res
     ElMessage.success('已创建 BUG #' + created.id + '，现在可上传附件')
     editing.value = created
@@ -523,13 +633,47 @@ const openEditDialog = async (row) => {
       steps_to_reproduce: d.steps_to_reproduce || '',
       environment: d.environment || '',
       source: d.source || 'manual',
+      priority: d.priority || 'P2',
+      defect_type: d.defect_type || 'functional',
+      version: d.version || null,
+      module: d.module || '',
+      resolver: d.resolver || null,
+      verifier: d.verifier || null,
+      related_testcase: d.related_testcase || null,
+      due_at: d.due_at || null,
+      expected_result: d.expected_result || '',
+      actual_result: d.actual_result || '',
       attachments: d.attachments || []
     })
+    loadVersions(d.project)
+    loadTestcases(d.project)
     dialogVisible.value = true
   } catch (e) {
     ElMessage.error('加载详情失败：' + (e.message || ''))
   }
 }
+
+const buildPayload = () => ({
+  title: form.title,
+  project: form.project,
+  severity: form.severity,
+  status: form.status,
+  assigned_to: form.assigned_to || null,
+  description: form.description,
+  steps_to_reproduce: form.steps_to_reproduce,
+  environment: form.environment,
+  source: form.source,
+  priority: form.priority,
+  defect_type: form.defect_type,
+  version: form.version || null,
+  module: form.module,
+  resolver: form.resolver || null,
+  verifier: form.verifier || null,
+  related_testcase: form.related_testcase || null,
+  due_at: form.due_at || null,
+  expected_result: form.expected_result,
+  actual_result: form.actual_result,
+})
 
 const submitForm = async () => {
   if (!form.title.trim()) return ElMessage.warning('请填写标题')
@@ -537,30 +681,10 @@ const submitForm = async () => {
   saving.value = true
   try {
     if (editing.value) {
-      await patchDefect(editing.value.id, {
-        title: form.title,
-        project: form.project,
-        severity: form.severity,
-        status: form.status,
-        assigned_to: form.assigned_to || null,
-        description: form.description,
-        steps_to_reproduce: form.steps_to_reproduce,
-        environment: form.environment,
-        source: form.source
-      })
+      await patchDefect(editing.value.id, buildPayload())
       ElMessage.success('已保存')
     } else {
-      const res = await createDefect({
-        title: form.title,
-        project: form.project,
-        severity: form.severity,
-        status: form.status,
-        assigned_to: form.assigned_to || null,
-        description: form.description,
-        steps_to_reproduce: form.steps_to_reproduce,
-        environment: form.environment,
-        source: form.source
-      })
+      const res = await createDefect(buildPayload())
       const created = res.data || res
       ElMessage.success('已创建 BUG #' + created.id)
       editing.value = created
@@ -612,7 +736,7 @@ const removeAtt = async (att) => {
 
 const quickStatus = async (row, status) => {
   try {
-    await patchDefect(row.id, { status })
+    await transitionDefect(row.id, { to_status: status })
     ElMessage.success('已更新')
     loadList()
   } catch (e) {
@@ -634,7 +758,7 @@ const confirmDelete = async (row) => {
 // 操作列下拉菜单命令分发
 const handleRowCmd = (cmd, row) => {
   if (cmd === 'detail') {
-    openEditDialog(row)
+    goDetail(row)
   } else if (cmd === 'in_progress') {
     quickStatus(row, 'in_progress')
   } else if (cmd === 'resolved') {
@@ -643,6 +767,8 @@ const handleRowCmd = (cmd, row) => {
     confirmDelete(row)
   }
 }
+
+const goDetail = (row) => router.push(`/defects/${row.id}`)
 
 // 监听项目变化，自动带入默认环境（编辑/新建均生效）
 watch(() => form.project, (newId, oldId) => {

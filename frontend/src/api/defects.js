@@ -47,3 +47,29 @@ export function saveQualityGate(data) {
 export function getReleaseConclusions(params) {
   return request.get('/defects/release-conclusions/', { params })
 }
+
+// 缺陷统计（状态/优先级/类型/模块/人员分布 + 趋势）
+export function getDefectStats(params) {
+  return request.get('/defects/defects/stats/', { params })
+}
+
+// 状态流转
+export function transitionDefect(id, data) {
+  return request.post(`/defects/defects/${id}/transition/`, data)
+}
+
+// 缺陷评论
+export function getDefectComments(defectId) {
+  return request.get(`/defects/defects/${defectId}/comments/`)
+}
+export function createDefectComment(defectId, data) {
+  return request.post(`/defects/defects/${defectId}/comments/`, data)
+}
+export function deleteDefectComment(defectId, commentId) {
+  return request.delete(`/defects/defects/${defectId}/comments/${commentId}/`)
+}
+
+// 缺陷流转历史
+export function getDefectTransitions(params) {
+  return request.get('/defects/defect-transitions/', { params })
+}

@@ -130,6 +130,15 @@
           <h3>问题管理</h3>
           <p>BUG 全生命周期管理：截图、严重度、状态流转</p>
         </div>
+
+        <!-- MCP 控制台 -->
+        <div class="nav-card" @click="handleNavigate('mcp')" role="button" tabindex="0">
+          <div class="card-icon mcp-icon">
+            <el-icon><Link /></el-icon>
+          </div>
+          <h3>MCP 控制台</h3>
+          <p>工具目录、危险操作审批闸、调用日志与接入配置</p>
+        </div>
       </div>
     </div>
   </div>
@@ -176,7 +185,8 @@ const handleNavigate = (type) => {
     'perf': '/performance-testing/scripts',
     'ops-tools': '/ops-tools/text2sql',
     'ai-eval': '/ai-eval/dashboard',
-    'defects': '/defects'
+    'defects': '/defects',
+    'mcp': '/mcp/console'
   }
 
   if (routes[type]) {

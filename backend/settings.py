@@ -77,7 +77,11 @@ LOCAL_APPS = [
     'apps.scheduler.apps.SchedulerConfig',  # 统一调度中心
     'apps.ops_tools.apps.OpsToolsConfig',  # 运维工具
     'apps.defects.apps.DefectsConfig',  # 缺陷实体与发布门禁（#260）
+    'apps.defects_oss.apps.DefectsOssConfig',  # 缺陷管理(开源对比)：照搬开源 defects，独立 app_label / defects_oss_* 表
     'apps.ai_eval.apps.AiEvalConfig',  # AI 评测与反馈闭环（#261）
+    'apps.docs',  # 文档中心（纯文件驱动，扫描磁盘 Markdown）
+    'apps.monitor',  # 监控中心（探测 + 告警 + Django-Q2 周期调度）
+    'apps.mcp',  # MCP 控制台（工具目录 + 危险操作审批闸 + 调用日志 + 连接配置）
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

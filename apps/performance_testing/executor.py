@@ -359,6 +359,28 @@ def execute(execution_id: str) -> None:
         if metric_objs:
             PerformanceMetric.objects.bulk_create(metric_objs)
 
+        # 5.5 验收判定（SLA 阈值 + 验收目标）：脚本未配置时统一为 NOT_EVALUATED，不影响既有流程
+        verdict_fields: Dict[str, Any] = {}
+        try:
+            from .acceptance import evaluate_acceptance
+
+            summary_for_eval = {
+                "avg_response_time": summary_data.get("avg", 0.0),
+                "p90": summary_data.get("p90", 0.0),
+                "p95": summary_data.get("p95", 0.0),
+                "p99": summary_data.get("p99", 0.0),
+                "error_rate": summary_data.get("error_rate", 0.0),
+                "throughput": summary_data.get("throughput", 0.0),
+            }
+            verdict_fields = evaluate_acceptance(
+                getattr(execution.script, "perf_targets", None),
+                getattr(execution.script, "sla_config", None),
+                summary_for_eval,
+                parsed.get("metrics") or [],
+            )
+        except Exception as exc:  # 判定失败不能影响执行本身的终态
+            logger.warning("验收判定失败（不阻塞）: %s", exc)
+
         warn_msg = "; ".join(warnings) if warnings else ""
         # 6. 终态先在内存实例上生效：报告里的「状态 / 结束时间」取的就是这个实例，
         #    若不同步，报告会在 JMeter 结束后立刻生成却拿到仍为 RUNNING 的实例，
@@ -367,6 +389,8 @@ def execute(execution_id: str) -> None:
         execution.status = "COMPLETED"
         execution.completed_at = finish_at
         execution.error_message = warn_msg
+        for _k, _v in verdict_fields.items():
+            setattr(execution, _k, _v)
 
         # 7. HTML 报告（执行结束即自动生成，无需进详情页手动「重新生成报告」）
         try:
@@ -393,6 +417,7 @@ def execute(execution_id: str) -> None:
         PerformanceExecution.objects.filter(pk=execution.pk).update(
             status="COMPLETED", completed_at=finish_at,
             error_message=warn_msg,
+            **verdict_fields,
         )
         logger.info("性能执行完成 %s", execution_id)
 

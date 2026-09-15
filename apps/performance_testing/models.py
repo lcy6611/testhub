@@ -49,6 +49,11 @@ class PerformanceScript(models.Model):
     duration = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
     # 实时报告开关
     realtime_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+    # 验收目标（事后判定是否「通过」）：{max_p95_rt, max_avg_rt, min_tps, max_error_rate}
+    perf_targets = models.JSONField(default=dict, blank=True, verbose_name="验收目标")
+    # SLA 阈值（判定是否「违规」，支持运行期熔断）：
+    # {enabled, abort_on_breach, breach_window, thresholds:{avg_response_time, p95_response_time, error_rate, min_tps}}
+    sla_config = models.JSONField(default=dict, blank=True, verbose_name="SLA 阈值配置")
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -148,6 +153,13 @@ class PerformanceExecution(models.Model):
         ("CANCELLED", "已取消"),
     ]
 
+    #: SLA 判定 / 验收判定的共用结果码
+    SLA_RESULT_CHOICES = [
+        ("PASSED", "通过"),
+        ("FAILED", "未通过"),
+        ("NOT_EVALUATED", "未评估"),
+    ]
+
     execution_id = models.CharField(max_length=50, unique=True, verbose_name="执行ID")
     script = models.ForeignKey(
         PerformanceScript, on_delete=models.CASCADE, related_name="executions", verbose_name="脚本"
@@ -174,6 +186,17 @@ class PerformanceExecution(models.Model):
 
     started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始时间")
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name="完成时间")
+
+    # 判定结果（执行收尾时自动评估落库）
+    sla_result = models.CharField(
+        max_length=20, choices=SLA_RESULT_CHOICES, default="NOT_EVALUATED", verbose_name="SLA判定结果"
+    )
+    sla_detail = models.JSONField(default=list, blank=True, verbose_name="SLA逐项判定")
+    verdict = models.CharField(
+        max_length=20, choices=SLA_RESULT_CHOICES, default="NOT_EVALUATED", verbose_name="验收判定"
+    )
+    verdict_details = models.JSONField(default=list, blank=True, verbose_name="验收明细")
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         verbose_name="创建者",

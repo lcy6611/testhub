@@ -211,6 +211,79 @@
               </div>
             </el-card>
 
+            <!-- 验收目标与 SLA 阈值（执行结束后自动判定） -->
+            <el-card class="section-card" shadow="never">
+              <div class="section-header">
+                <div class="section-title">验收目标与 SLA 阈值</div>
+              </div>
+              <div class="help-text">执行结束后自动判定并写入执行详情；留空表示不校验该项</div>
+
+              <el-divider content-position="left">验收目标（判定「通过 / 未通过」）</el-divider>
+              <el-row :gutter="12">
+                <el-col :span="6">
+                  <el-form-item label="P95 上限(ms)">
+                    <el-input-number v-model="form.perf_targets.max_p95_rt" :min="0" :controls="false" style="width:100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                  <el-form-item label="平均响应上限(ms)">
+                    <el-input-number v-model="form.perf_targets.max_avg_rt" :min="0" :controls="false" style="width:100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                  <el-form-item label="TPS 下限(req/s)">
+                    <el-input-number v-model="form.perf_targets.min_tps" :min="0" :controls="false" style="width:100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                  <el-form-item label="错误率上限(%)">
+                    <el-input-number v-model="form.perf_targets.max_error_rate" :min="0" :controls="false" style="width:100%" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-divider content-position="left">SLA 阈值（判定「违规」）</el-divider>
+              <el-form-item label="启用 SLA 判定">
+                <el-switch v-model="form.sla_config.enabled" />
+              </el-form-item>
+              <template v-if="form.sla_config.enabled">
+                <el-row :gutter="12">
+                  <el-col :span="6">
+                    <el-form-item label="平均响应上限(ms)">
+                      <el-input-number v-model="form.sla_config.thresholds.avg_response_time" :min="0" :controls="false" style="width:100%" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="6">
+                    <el-form-item label="P95 上限(ms)">
+                      <el-input-number v-model="form.sla_config.thresholds.p95_response_time" :min="0" :controls="false" style="width:100%" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="6">
+                    <el-form-item label="错误率上限(%)">
+                      <el-input-number v-model="form.sla_config.thresholds.error_rate" :min="0" :controls="false" style="width:100%" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="6">
+                    <el-form-item label="TPS 下限(req/s)">
+                      <el-input-number v-model="form.sla_config.thresholds.min_tps" :min="0" :controls="false" style="width:100%" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-row :gutter="12">
+                  <el-col :span="8">
+                    <el-form-item label="超限熔断中止">
+                      <el-switch v-model="form.sla_config.abort_on_breach" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="熔断窗口(秒)">
+                      <el-input-number v-model="form.sla_config.breach_window" :min="1" style="width:100%" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+              </template>
+            </el-card>
+
             <!-- 线程组 -->
             <el-card v-for="(tg, tgi) in threadGroups" :key="tgi" class="section-card thread-group-card" shadow="never">
               <div class="section-header">
@@ -503,6 +576,21 @@ const defaultSampler = () => ({
   assertions: [{ type: 'response_code', value: '200' }]
 })
 
+// 验收目标（事后判定是否「通过」）；留空(null) 表示不校验该维度
+function defaultPerfTargets() {
+  return { max_p95_rt: null, max_avg_rt: null, min_tps: null, max_error_rate: null }
+}
+
+// SLA 阈值（判定是否「违规」）；thresholds 中留空(null) 表示不校验该项
+function defaultSlaConfig() {
+  return {
+    enabled: false,
+    abort_on_breach: false,
+    breach_window: 10,
+    thresholds: { avg_response_time: null, p95_response_time: null, error_rate: null, min_tps: null }
+  }
+}
+
 const form = reactive({
   name: '',
   description: '',
@@ -516,7 +604,9 @@ const form = reactive({
   thread_count: 10,
   ramp_up: 10,
   duration: 60,
-  realtime_enabled: false
+  realtime_enabled: false,
+  perf_targets: defaultPerfTargets(),
+  sla_config: defaultSlaConfig()
 })
 
 const threadGroups = computed({
@@ -575,7 +665,13 @@ async function selectScript(id) {
       thread_count: d.thread_count || 10,
       ramp_up: d.ramp_up || 10,
       duration: d.duration || 60,
-      realtime_enabled: d.realtime_enabled || false
+      realtime_enabled: d.realtime_enabled || false,
+      perf_targets: { ...defaultPerfTargets(), ...(d.perf_targets || {}) },
+      sla_config: {
+        ...defaultSlaConfig(),
+        ...(d.sla_config || {}),
+        thresholds: { ...defaultSlaConfig().thresholds, ...((d.sla_config || {}).thresholds || {}) }
+      }
     })
     if (!form.jmx_config.thread_groups || !form.jmx_config.thread_groups.length) {
       form.jmx_config.thread_groups = [defaultThreadGroup()]
@@ -619,7 +715,9 @@ function createNewScript() {
     thread_count: 10,
     ramp_up: 10,
     duration: 60,
-    realtime_enabled: false
+    realtime_enabled: false,
+    perf_targets: defaultPerfTargets(),
+    sla_config: defaultSlaConfig()
   })
   fileList.value = []
   jmxFile.value = null
@@ -887,6 +985,8 @@ async function handleSave(opts = {}) {
     formData.append('ramp_up', String(form.ramp_up))
     formData.append('duration', String(form.duration))
     formData.append('realtime_enabled', String(form.realtime_enabled))
+    formData.append('perf_targets', JSON.stringify(form.perf_targets || {}))
+    formData.append('sla_config', JSON.stringify(form.sla_config || {}))
 
     if (form.script_type === 'ONLINE') {
       // 同步顶层默认参数到线程组

@@ -76,6 +76,8 @@ class PerformanceScriptSerializer(serializers.ModelSerializer):
             "ramp_up",
             "duration",
             "realtime_enabled",
+            "perf_targets",
+            "sla_config",
             "created_by",
             "created_by_name",
             "execution_count",
@@ -112,6 +114,9 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
 
     script_name = serializers.CharField(source="script.name", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    # 这两个是数据字段，get_*_display 需显式声明；status_display 用的是 source 写法
+    sla_result_display = serializers.CharField(source="get_sla_result_display", read_only=True)
+    verdict_display = serializers.CharField(source="get_verdict_display", read_only=True)
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
     has_report = serializers.SerializerMethodField()
     has_jtl = serializers.SerializerMethodField()
@@ -137,6 +142,12 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "error_message",
             "has_report",
             "has_jtl",
+            "sla_result",
+            "sla_result_display",
+            "sla_detail",
+            "verdict",
+            "verdict_display",
+            "verdict_details",
             "started_at",
             "completed_at",
             "created_by",
@@ -153,6 +164,10 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "jmeter_log",
             "report_path",
             "error_message",
+            "sla_result",
+            "sla_detail",
+            "verdict",
+            "verdict_details",
             "started_at",
             "completed_at",
             "created_at",

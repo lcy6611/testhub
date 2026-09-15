@@ -36,6 +36,36 @@
             </div>
           </div>
           <el-empty v-else description="汇总数据尚未生成" />
+
+          <!-- 验收判定：SLA 阈值判定 + 验收目标判定（脚本未配置时均为「未评估」） -->
+          <div class="verdict-block" v-if="execution">
+            <div class="verdict-head">
+              <span class="verdict-title">验收判定</span>
+              <el-tag :type="verdictType(execution.sla_result)" size="small">
+                SLA：{{ execution.sla_result_display || '未评估' }}
+              </el-tag>
+              <el-tag :type="verdictType(execution.verdict)" size="small" style="margin-left: 8px">
+                验收目标：{{ execution.verdict_display || '未评估' }}
+              </el-tag>
+            </div>
+            <el-table :data="judgeRows" size="small" stripe v-if="judgeRows.length" style="margin-top: 10px">
+              <el-table-column prop="scope" label="范围" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="source" label="来源" width="100" align="center" />
+              <el-table-column prop="metric" label="指标" min-width="140" />
+              <el-table-column prop="comparator" label="比较" width="70" align="center" />
+              <el-table-column prop="target" label="阈值/目标" width="110" align="center" />
+              <el-table-column prop="actual" label="实际" width="110" align="center" />
+              <el-table-column prop="unit" label="单位" width="80" align="center" />
+              <el-table-column label="结果" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.passed ? 'success' : 'danger'" size="small">
+                    {{ row.passed ? '通过' : '未通过' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="该脚本未配置 SLA 阈值 / 验收目标，本次未评估" :image-size="60" />
+          </div>
         </el-tab-pane>
 
         <!-- 结构化指标 -->
@@ -185,6 +215,45 @@ let pollTimer = null
 
 const formatTime = (val) => val ? new Date(val).toLocaleString('zh-CN', { hour12: false }) : '-'
 const statusType = (s) => ({ QUEUED: 'info', RUNNING: 'warning', COMPLETED: 'success', FAILED: 'danger', CANCELLED: 'info' }[s] || 'info')
+const verdictType = (v) => ({ PASSED: 'success', FAILED: 'danger', NOT_EVALUATED: 'info' }[v] || 'info')
+
+// 验收判定明细：把 SLA 逐项判定 + 验收目标明细拍平成一张表
+const judgeRows = computed(() => {
+  const ex = execution.value
+  if (!ex) return []
+  const unitOf = (label) => {
+    const s = String(label || '')
+    if (s.includes('ms')) return 'ms'
+    if (s.includes('%')) return '%'
+    return 'req/s'
+  }
+  const rows = []
+  for (const d of ex.sla_detail || []) {
+    rows.push({
+      scope: '(整体)',
+      source: 'SLA',
+      metric: d.label,
+      comparator: d.comparator || '',
+      target: d.threshold,
+      actual: d.actual,
+      unit: unitOf(d.label),
+      passed: !!d.passed,
+    })
+  }
+  for (const d of ex.verdict_details || []) {
+    rows.push({
+      scope: d.step,
+      source: '验收目标',
+      metric: d.metric,
+      comparator: d.metric === 'TPS' ? '≥' : '≤',
+      target: d.target,
+      actual: d.actual,
+      unit: d.unit,
+      passed: d.result === 'PASS',
+    })
+  }
+  return rows
+})
 
 const summaryCards = computed(() => {
   if (!summary.value) return []
@@ -481,4 +550,7 @@ onUnmounted(() => {
 .monitor-chart-card { background: #fff; border-radius: 8px; border: 1px solid #ebeef5; padding: 12px; margin-bottom: 16px; }
 .monitor-chart-title { font-size: 13px; font-weight: 600; color: #303133; text-align: center; margin-bottom: 4px; }
 .monitor-chart { height: 220px; }
+.verdict-block { margin-top: 20px; border-top: 1px solid #ebeef5; padding-top: 16px; }
+.verdict-head { display: flex; align-items: center; gap: 8px; }
+.verdict-title { font-size: 15px; font-weight: 600; color: #303133; margin-right: 8px; }
 </style>

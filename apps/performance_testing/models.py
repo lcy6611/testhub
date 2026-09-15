@@ -448,3 +448,31 @@ class PerformanceBaseline(models.Model):
 
     def __str__(self):
         return f"脚本 {self.script_id} 的性能基线"
+
+
+class PerformanceComparisonReport(models.Model):
+    """多轮执行对照报告：持久化指标矩阵快照 + 可选 AI 对照分析。"""
+
+    script = models.ForeignKey(
+        PerformanceScript, on_delete=models.CASCADE, related_name="comparison_reports", verbose_name="脚本"
+    )
+    title = models.CharField(max_length=200, verbose_name="报告标题")
+    #: 参与对比的执行主键列表（2~5 个，保持用户选择顺序）
+    execution_ids = models.JSONField(default=list, verbose_name="参与对比的执行ID列表")
+    reference_execution_id = models.IntegerField(null=True, blank=True, verbose_name="基准执行ID")
+    snapshot = models.JSONField(default=dict, verbose_name="对照快照")
+    ai_analysis = models.TextField(null=True, blank=True, verbose_name="AI对照分析")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="perf_comparison_reports", verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = "perf_comparison_report"
+        verbose_name = "性能对照报告"
+        verbose_name_plural = "性能对照报告"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title

@@ -224,3 +224,21 @@ export function compareBaseline(executionId) {
 export function deleteBaseline(id) {
   return request({ url: `/performance-testing/baselines/${id}/`, method: 'delete' })
 }
+
+// ==================== 多轮对照报告 ====================
+
+export function getComparisonReports(params) {
+  return request({ url: '/performance-testing/comparison-reports/', method: 'get', params })
+}
+
+export function getComparisonReport(id) {
+  return request({ url: `/performance-testing/comparison-reports/${id}/`, method: 'get' })
+}
+
+export function createComparisonReport(data) {
+  return request({ url: '/performance-testing/comparison-reports/', method: 'post', data, timeout: 180000 })
+}
+
+export function deleteComparisonReport(id) {
+  return request({ url: `/performance-testing/comparison-reports/${id}/`, method: 'delete' })
+}

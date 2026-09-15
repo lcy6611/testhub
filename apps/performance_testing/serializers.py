@@ -16,6 +16,7 @@ from .models import (
     PerformanceBatchExecution,
     PerformanceMonitorMetric,
     PerformanceBaseline,
+    PerformanceComparisonReport,
 )
 
 
@@ -364,3 +365,38 @@ class PerformanceBaselineSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"{key} 应在 0~1000 之间")
             value[key] = num
         return value
+
+
+class PerformanceComparisonReportSerializer(serializers.ModelSerializer):
+    """多轮对照报告。"""
+
+    script_name = serializers.CharField(source="script.name", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PerformanceComparisonReport
+        fields = [
+            "id",
+            "script",
+            "script_name",
+            "title",
+            "execution_ids",
+            "reference_execution_id",
+            "snapshot",
+            "ai_analysis",
+            "created_by_name",
+            "created_at",
+        ]
+        read_only_fields = ["id", "snapshot", "ai_analysis", "created_at"]
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.username if obj.created_by else ""
+
+
+class ComparisonReportCreateSerializer(serializers.Serializer):
+    """生成多轮对照报告的入参。"""
+
+    title = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    execution_ids = serializers.ListField(child=serializers.IntegerField(), min_length=2, max_length=5)
+    reference_execution_id = serializers.IntegerField(required=False, allow_null=True)
+    with_ai = serializers.BooleanField(required=False, default=True)

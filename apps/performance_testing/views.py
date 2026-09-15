@@ -39,6 +39,7 @@ from .models import (
     PerformanceConfig,
     PerformanceBatchExecution,
     PerformanceBaseline,
+    PerformanceComparisonReport,
 )
 from .serializers import (
     PerformanceScriptSerializer,
@@ -54,11 +55,14 @@ from .serializers import (
     PerformanceBatchExecutionSerializer,
     BatchExecutionCreateSerializer,
     PerformanceBaselineSerializer,
+    PerformanceComparisonReportSerializer,
+    ComparisonReportCreateSerializer,
 )
 from .executor import create_execution, validate_load, create_batch_execution
 from .influxdb_client import query_realtime, is_enabled as realtime_enabled
 from .jmx_builder import detect_dangerous_components, JMeterPlanBuilder, parse_jmx_to_config
 from . import baseline as baseline_service
+from . import comparison as comparison_service
 
 logger = logging.getLogger(__name__)
 
@@ -1121,3 +1125,54 @@ class PerformanceBaselineViewSet(viewsets.ModelViewSet):
             "degraded": degraded,
             "items": items,
         })
+
+
+class PerformanceComparisonReportViewSet(viewsets.ModelViewSet):
+    """多轮执行对照报告：生成（矩阵快照 + 可选 AI 分析）、列表、详情、删除。"""
+
+    queryset = PerformanceComparisonReport.objects.select_related("script", "created_by").all()
+    serializer_class = PerformanceComparisonReportSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["script"]
+    ordering_fields = ["created_at"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def create(self, request, *args, **kwargs):
+        """生成对照报告。
+
+        入参 execution_ids 至少要 2 个执行；顺序即前端展示顺序，第一个（或显式
+        reference_execution_id）作为基准执行。
+        """
+        sz = ComparisonReportCreateSerializer(data=request.data)
+        sz.is_valid(raise_exception=True)
+        data = sz.validated_data
+
+        ids = list(dict.fromkeys(data["execution_ids"]))  # 去重且保序
+        executions = list(PerformanceExecution.objects.filter(pk__in=ids).select_related("script"))
+        if len(executions) < 2:
+            return Response({"error": "至少需要 2 个有效的执行记录才能对照"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        order = {pk: idx for idx, pk in enumerate(ids)}
+        executions.sort(key=lambda e: order.get(e.pk, len(order)))
+
+        reference_id = data.get("reference_execution_id") or executions[0].pk
+        if reference_id not in {e.pk for e in executions}:
+            reference_id = executions[0].pk
+
+        snapshot = comparison_service.build_snapshot(executions, reference_id)
+        ai_text = comparison_service.analyze(snapshot) if data.get("with_ai", True) else ""
+
+        script = executions[0].script
+        title = (data.get("title") or "").strip() or f"{script.name if script else '压测'} 多轮对照（{len(executions)} 轮）"
+        report = PerformanceComparisonReport.objects.create(
+            script=script,
+            title=title,
+            execution_ids=[e.pk for e in executions],
+            reference_execution_id=reference_id,
+            snapshot=snapshot,
+            ai_analysis=ai_text,
+            created_by=request.user,
+        )
+        return Response(self.get_serializer(report).data, status=status.HTTP_201_CREATED)

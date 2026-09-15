@@ -709,6 +709,11 @@ const routes = [
         component: () => import('@/views/performance/ReportManagement.vue')
       },
       {
+        path: 'comparison',
+        name: 'PerfComparison',
+        component: () => import('@/views/performance/ComparisonReport.vue')
+      },
+      {
         path: 'scheduled-tasks',
         name: 'PerfScheduledTasks',
         component: () => import('@/views/performance/ScheduledTasks.vue')

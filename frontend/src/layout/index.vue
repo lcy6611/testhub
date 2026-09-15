@@ -365,6 +365,10 @@
               <el-icon><Document /></el-icon>
               <span>报告管理</span>
             </el-menu-item>
+            <el-menu-item index="/performance-testing/comparison">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>对照报告</span>
+            </el-menu-item>
             <el-menu-item index="/performance-testing/scheduled-tasks">
               <el-icon><Timer /></el-icon>
               <span>定时任务</span>
@@ -779,6 +783,7 @@ const breadcrumbTitle = computed(() => {
     '/performance-testing/scripts/create': '新建脚本',
     '/performance-testing/executions': '执行记录',
     '/performance-testing/reports': '报告管理',
+    '/performance-testing/comparison': '对照报告',
     '/performance-testing/scheduled-tasks': '定时任务',
     '/performance-testing/ai-generate': 'AI 生成',
 

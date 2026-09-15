@@ -16,9 +16,27 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from django.utils import timezone
+
 from .result_parser import parse_jtl
 
 logger = logging.getLogger(__name__)
+
+
+def _fmt_dt(value) -> str:
+    """格式化时间：aware 时间统一转本地时区（TIME_ZONE）后渲染。
+
+    否则 DB 里存的 UTC（USE_TZ=True）会直接 strftime 出 UTC 时间，
+    报告里「开始时间」会比页面上显示的早 8 小时。
+    """
+    if not value:
+        return "-"
+    try:
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
+    except Exception:  # noqa: BLE001
+        pass
+    return value.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _fmt_num(n, digits: int = 2) -> str:
@@ -94,7 +112,11 @@ def _derive_time_from_jtl(jtl_path: str) -> tuple[Optional[datetime], Optional[d
                         continue
         if first_ts and last_ts:
             from datetime import datetime as dt
-            return dt.fromtimestamp(first_ts / 1000), dt.fromtimestamp(last_ts / 1000)
+            # 统一为 aware 时间（本地时区），与 execution.started_at 的语义一致
+            return (
+                timezone.make_aware(dt.fromtimestamp(first_ts / 1000)),
+                timezone.make_aware(dt.fromtimestamp(last_ts / 1000)),
+            )
     except Exception as exc:
         logger.warning("从 JTL 推算时间失败: %s", exc)
     return None, None
@@ -338,8 +360,8 @@ def generate_html_report(execution, output_path: str, *, jtl_path: str = None) -
         if not end_dt and jtl_end:
             end_dt = jtl_end
 
-    start_time = start_dt.strftime("%Y-%m-%d %H:%M:%S") if start_dt else "-"
-    end_time = end_dt.strftime("%Y-%m-%d %H:%M:%S") if end_dt else "-"
+    start_time = _fmt_dt(start_dt)
+    end_time = _fmt_dt(end_dt)
 
     # 错误统计
     top_errors = []

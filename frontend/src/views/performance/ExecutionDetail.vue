@@ -159,7 +159,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { getExecution, getExecutionSummary, getExecutionMetrics, getRealtimeData, downloadJtl, downloadJmx, regenerateExecutionReport, getExecutionReport, getExecutionMonitoring } from '@/api/performance'
+import { getExecution, getExecutionSummary, getExecutionMetrics, getRealtimeData, regenerateExecutionReport, getExecutionReport, getExecutionMonitoring } from '@/api/performance'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent])
 
@@ -384,19 +384,20 @@ const stopMonitoringPoll = () => {
   }
 }
 
-const handleDownload = async (type) => {
-  try {
-    const res = type === 'jtl' ? await downloadJtl(route.params.id) : await downloadJmx(route.params.id)
-    const blob = new Blob([res.data], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${execution.value.execution_id}.${type === 'jtl' ? 'jtl' : 'jmx'}`
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error('下载失败')
-  }
+// 结果文件走浏览器原生下载（?token= 认证），不再用 axios 拉 blob：
+// JTL 动辄十几 MB，axios 超时 10s、内存里再拼一次 Blob，容易在下载器/内嵌 webview 里失败。
+const handleDownload = (type) => {
+  const token = localStorage.getItem('access_token') || ''
+  const path = type === 'jtl' ? 'jtl_download' : 'jmx_download'
+  const filename = `${execution.value?.execution_id || route.params.id}.${type === 'jtl' ? 'jtl' : 'jmx'}`
+  const url = `/api/performance-testing/executions/${route.params.id}/${path}/?token=${encodeURIComponent(token)}`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 const loadAll = async () => {

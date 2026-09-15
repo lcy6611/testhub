@@ -17,6 +17,56 @@ from django.db import models
 logger = logging.getLogger(__name__)
 
 
+#: 状态码 → 中文兜底映射（模型字段没有 choices 时使用，保证数字人不会吐出英文状态码）
+_STATUS_CN_FALLBACK = {
+    "active": "启用", "enabled": "启用", "disabled": "停用", "paused": "暂停",
+    "archived": "已归档", "draft": "草稿", "deprecated": "已废弃", "published": "已发布",
+    "pending": "待处理", "queued": "排队中", "running": "执行中", "in_progress": "进行中",
+    "completed": "已完成", "failed": "失败", "cancelled": "已取消", "partial": "部分完成",
+    "submitted": "已提交", "generated": "已生成", "executed": "已执行",
+    "open": "待处理", "resolved": "已解决", "closed": "已关闭", "reopened": "重新打开",
+    "untested": "未执行", "passed": "通过", "blocked": "阻塞", "retest": "待重测",
+    "uploaded": "已上传", "analyzing": "分析中", "analyzed": "已分析",
+    "approved": "已通过", "rejected": "已拒绝", "abstained": "已弃权",
+    "success": "成功", "error": "异常", "unknown": "未知",
+}
+
+
+def _status_cn(value, model=None, field: str = "status") -> str:
+    """状态码 → 中文显示名。
+
+    优先用模型字段 choices 的中文 label（与页面上看到的完全一致），
+    取不到再回退通用映射。数字人拿到的状态必须是中文，否则回答里会直接出现英文码。
+    """
+    if value is None or value == "":
+        return ""
+    if model is not None:
+        try:
+            choices = dict(model._meta.get_field(field).choices or [])
+            if value in choices:
+                return str(choices[value])
+        except Exception:  # noqa: BLE001 - 字段不存在/无 choices 时静默回退
+            pass
+    return _STATUS_CN_FALLBACK.get(str(value).lower(), str(value))
+
+
+def _localize_status(payload, model=None, field: str = "status"):
+    """把状态码就地替换成中文，英文码保留在 <field>_code（便于继续做筛选/判断）。
+
+    支持 dict，也支持 list[dict]（.values() 结果）。
+    """
+    rows = payload if isinstance(payload, list) else [payload]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code = row.get(field)
+        if code is None:
+            continue
+        row[f"{field}_code"] = code
+        row[field] = _status_cn(code, model, field)
+    return payload
+
+
 # ────────────────────────────── 工具执行函数 ──────────────────────────────
 
 def _list_projects(**kwargs) -> Dict[str, Any]:
@@ -28,6 +78,7 @@ def _list_projects(**kwargs) -> Dict[str, Any]:
         qs = qs.filter(status=status_filter)
     limit = min(int(kwargs.get("limit", 20)), 100)
     items = list(qs[:limit].values("id", "name", "description", "status", "created_at"))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -49,6 +100,7 @@ def _list_testcases(**kwargs) -> Dict[str, Any]:
         qs = qs.filter(models.Q(title__icontains=keyword) | models.Q(description__icontains=keyword))
     limit = min(int(kwargs.get("limit", 20)), 100)
     items = list(qs[:limit].values("id", "title", "priority", "status", "test_type", "project__name", "author__username"))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -495,7 +547,8 @@ def _update_run_case_status(**kwargs) -> Dict[str, Any]:
     rc.executed_by = user
     rc.executed_at = timezone.now()
     rc.save()
-    return {"id": rc.id, "status": rc.status, "testcase": rc.testcase.title}
+    return {"id": rc.id, "status": _status_cn(rc, type(rc)),
+        "status_code": rc, "testcase": rc.testcase.title}
 
 
 def _list_test_reports(**kwargs) -> Dict[str, Any]:
@@ -507,6 +560,7 @@ def _list_test_reports(**kwargs) -> Dict[str, Any]:
         "id", "status", "total_requests", "passed_requests", "failed_requests", "created_at",
         "test_suite__name",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -557,6 +611,7 @@ def _list_ui_test_suites(**kwargs) -> Dict[str, Any]:
         "passed_count", "failed_count", "created_at",
         "project__name",
     ))
+    _localize_status(items, qs.model, "execution_status")
     return {"total": qs.count(), "items": items}
 
 
@@ -572,7 +627,8 @@ def _run_ui_automation(**kwargs) -> Dict[str, Any]:
         result = run_full_process_sync(task_description)
         return {
             "task": task_description,
-            "status": result.get("status", "completed"),
+            "status": _status_cn(result.get("status", "completed")),
+            "status_code": result.get("status", "completed"),
             "steps": result.get("steps", []),
             "screenshots": result.get("screenshots", []),
         }
@@ -615,7 +671,8 @@ def _run_ui_test_suite(**kwargs) -> Dict[str, Any]:
             holder["result"] = {
                 "suite_id": suite.id,
                 "suite_name": suite.name,
-                "execution_status": suite.execution_status,
+                "execution_status": _status_cn(suite.execution_status, type(suite), "execution_status"),
+                "execution_status_code": suite.execution_status,
                 "passed_count": suite.passed_count,
                 "failed_count": suite.failed_count,
                 "hint": "查看完整报告：测试管理 → UI自动化 → 测试报告",
@@ -633,7 +690,8 @@ def _run_ui_test_suite(**kwargs) -> Dict[str, Any]:
         return {
             "suite_id": suite.id,
             "suite_name": suite.name,
-            "status": "running",
+            "status": _status_cn("running"),
+            "status_code": "running",
             "message": "执行超过 5 分钟仍在运行，请稍后用 list_ui_test_suites 查询最新状态，或到测试报告页面查看",
         }
     return holder["result"]
@@ -665,7 +723,8 @@ def _ai_generate_testcases(**kwargs) -> Dict[str, Any]:
         # 如果 Celery 不可用，直接返回任务 ID 让前端轮询
         pass
 
-    return {"task_id": task.task_id, "status": "pending", "hint": "用 task_id 轮询 GET /api/requirement-analysis/testcase-generation/{task_id}/ 获取结果"}
+    return {"task_id": task.task_id, "status": _status_cn("pending"),
+    "status_code": "pending", "hint": "用 task_id 轮询 GET /api/requirement-analysis/testcase-generation/{task_id}/ 获取结果"}
 
 
 def _list_knowledge_bases(**kwargs) -> Dict[str, Any]:
@@ -827,6 +886,7 @@ def _list_execution_history(**kwargs) -> Dict[str, Any]:
         "id", "status", "actual_result", "comments", "executed_at",
         "run_case__testcase__title", "executed_by__username",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -845,6 +905,7 @@ def _list_app_test_suites(**kwargs) -> Dict[str, Any]:
         "passed_count", "failed_count", "last_run_at", "created_at",
         "project__name",
     ))
+    _localize_status(items, qs.model, "execution_status")
     return {"total": qs.count(), "items": items}
 
 
@@ -857,6 +918,7 @@ def _list_app_devices(**kwargs) -> Dict[str, Any]:
         "id", "device_id", "device_name", "platform", "os_version",
         "status", "is_active",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -923,7 +985,8 @@ def _run_app_test_suite(**kwargs) -> Dict[str, Any]:
             "execution_ids": execution_ids,
             "test_case_count": len(executions),
             "device_id": device.device_id,
-            "status": "submitted",
+            "status": _status_cn("submitted"),
+            "status_code": "submitted",
             "hint": "已在后台执行，可稍后用 list_app_test_suites 查询最新状态，或到 APP自动化→执行记录查看",
         }
     except Exception as e:
@@ -1117,6 +1180,7 @@ def _list_reviews(**kwargs) -> Dict[str, Any]:
     items = list(qs[:limit].values(
         "id", "title", "status", "priority", "deadline", "created_at", "creator__username",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -1146,7 +1210,8 @@ def _create_review(**kwargs) -> Dict[str, Any]:
             ReviewAssignment.objects.get_or_create(review=review, reviewer=reviewer)
         except User.DoesNotExist:
             continue
-    return {"id": review.id, "title": review.title, "status": review.status, "reviewers_count": len(reviewer_ids)}
+    return {"id": review.id, "title": review.title, "status": _status_cn(review, type(review)),
+        "status_code": review, "reviewers_count": len(reviewer_ids)}
 
 
 def _submit_review_decision(**kwargs) -> Dict[str, Any]:
@@ -1185,7 +1250,13 @@ def _submit_review_decision(**kwargs) -> Dict[str, Any]:
         review.completed_at = timezone.now()
         review.save()
 
-    return {"review_id": review.id, "assignment_status": assignment.status, "review_status": review.status}
+    return {
+        "review_id": review.id,
+        "assignment_status": _status_cn(assignment.status, type(assignment), "status"),
+        "assignment_status_code": assignment.status,
+        "review_status": _status_cn(review, type(review)),
+        "review_status_code": review.status,
+    }
 
 
 # ────────────────────────── 版本管理 ──────────────────────────
@@ -1350,6 +1421,7 @@ def _list_test_runs(**kwargs) -> Dict[str, Any]:
         "id", "name", "status", "started_at", "completed_at", "created_at",
         "test_plan__name", "project__name", "assignee__username",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -1370,7 +1442,7 @@ def _start_test_run(**kwargs) -> Dict[str, Any]:
     run.status = "in_progress"
     run.started_at = timezone.now()
     run.save(update_fields=["status", "started_at"])
-    return {"id": run.id, "name": run.name, "status": run.status}
+    return {"id": run.id, "name": run.name, "status": _status_cn(run, type(run)), "status_code": run.status}
 
 
 # ────────────────────────── 测试套件（通用） ──────────────────────────
@@ -1447,6 +1519,7 @@ def _get_dashboard_stats(**kwargs) -> Dict[str, Any]:
     recent_runs = list(runs_qs.order_by("-created_at").values(
         "id", "name", "status", "created_at", "project__name"
     )[:10])
+    _localize_status(recent_runs, runs_qs.model)
 
     return {
         "total_projects": total_projects,
@@ -1507,7 +1580,8 @@ def _get_testcase_detail(**kwargs) -> Dict[str, Any]:
         "steps": tc.steps,
         "expected_result": tc.expected_result,
         "priority": tc.priority,
-        "status": tc.status,
+        "status": _status_cn(tc, type(tc)),
+        "status_code": tc,
         "test_type": tc.test_type,
         "tags": tc.tags,
         "project": {"id": tc.project_id, "name": tc.project.name} if tc.project else None,
@@ -1610,6 +1684,7 @@ def _list_requirement_docs(**kwargs) -> Dict[str, Any]:
         "id", "title", "document_type", "status", "file_size",
         "uploaded_by__username", "project__name", "created_at",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -1647,7 +1722,8 @@ def _get_requirement_doc(**kwargs) -> Dict[str, Any]:
         "id": doc.id,
         "title": doc.title,
         "document_type": doc.document_type,
-        "status": doc.status,
+        "status": _status_cn(doc, type(doc)),
+        "status_code": doc,
         "project": doc.project.name if doc.project else None,
         "uploaded_by": doc.uploaded_by.username if doc.uploaded_by else None,
         "file_size": doc.file_size,
@@ -1670,7 +1746,8 @@ def _get_generation_task_status(**kwargs) -> Dict[str, Any]:
     result = {
         "task_id": task.task_id,
         "title": task.title,
-        "status": task.status,
+        "status": _status_cn(task, type(task)),
+        "status_code": task,
         "progress": task.progress,
         "requirement_preview": (task.requirement_text or "")[:200],
         "created_at": task.created_at.isoformat() if task.created_at else None,
@@ -1716,7 +1793,7 @@ def _create_project(**kwargs) -> Dict[str, Any]:
         status=kwargs.get("status", "active"),
         owner=owner,
     )
-    return {"id": project.id, "name": project.name, "status": project.status}
+    return {"id": project.id, "name": project.name, "status": _status_cn(project, type(project)), "status_code": project.status}
 
 
 def _get_project_detail(**kwargs) -> Dict[str, Any]:
@@ -1735,7 +1812,8 @@ def _get_project_detail(**kwargs) -> Dict[str, Any]:
         "id": project.id,
         "name": project.name,
         "description": project.description,
-        "status": project.status,
+        "status": _status_cn(project.status, type(project)),
+        "status_code": project.status,
         "owner": project.owner.username,
         "created_at": project.created_at.isoformat(),
         "stats": {
@@ -1838,6 +1916,7 @@ def _list_performance_scripts(**kwargs) -> Dict[str, Any]:
         "id", "name", "description", "status", "script_type",
         "thread_count", "ramp_up", "duration", "realtime_enabled", "created_at",
     ))
+    _localize_status(items, qs.model)
     # PerformanceScript.projects 是 M2M，批量取每个脚本的第一个关联项目名
     script_ids = [i["id"] for i in items]
     projects_map = {}
@@ -1863,7 +1942,8 @@ def _get_performance_script_detail(**kwargs) -> Dict[str, Any]:
         "name": s.name,
         "description": s.description,
         "project": project.name if project else None,
-        "status": s.status,
+        "status": _status_cn(s, type(s)),
+        "status_code": s,
         "script_type": s.script_type,
         "thread_count": s.thread_count,
         "ramp_up": s.ramp_up,
@@ -1941,7 +2021,7 @@ def _create_performance_script(**kwargs) -> Dict[str, Any]:
     )
     if project:
         script.projects.add(project)
-    return {"id": script.id, "name": script.name, "script_type": script.script_type, "status": script.status}
+    return {"id": script.id, "name": script.name, "script_type": script.script_type, "status": _status_cn(script, type(script)), "status_code": script.status}
 
 
 def _execute_performance_script(**kwargs) -> Dict[str, Any]:
@@ -1986,7 +2066,8 @@ def _execute_performance_script(**kwargs) -> Dict[str, Any]:
         "execution_pk": execution.id,
         "script_id": script.id,
         "script_name": script.name,
-        "status": execution.status,
+        "status": _status_cn(execution, type(execution)),
+        "status_code": execution,
         "thread_count": execution.thread_count,
         "ramp_up": execution.ramp_up,
         "duration": execution.duration,
@@ -2016,7 +2097,8 @@ def _get_performance_execution_status(**kwargs) -> Dict[str, Any]:
         "execution_id": execution.execution_id,
         "execution_pk": execution.id,
         "script_name": execution.script.name if execution.script else None,
-        "status": execution.status,
+        "status": _status_cn(execution, type(execution)),
+        "status_code": execution,
         "thread_count": execution.thread_count,
         "ramp_up": execution.ramp_up,
         "duration": execution.duration,
@@ -2047,7 +2129,8 @@ def _get_performance_execution_summary(**kwargs) -> Dict[str, Any]:
 
     result = {
         "execution_id": execution.execution_id,
-        "status": execution.status,
+        "status": _status_cn(execution, type(execution)),
+        "status_code": execution,
         "script_name": execution.script.name if execution.script else None,
     }
 
@@ -2108,7 +2191,8 @@ def _get_performance_dashboard(**kwargs) -> Dict[str, Any]:
         latest_info = {
             "execution_id": latest.execution_id,
             "script_name": latest.script.name if latest.script else None,
-            "status": latest.status,
+            "status": _status_cn(latest, type(latest)),
+        "status_code": latest,
             "started_at": latest.started_at.isoformat() if latest.started_at else None,
             "completed_at": latest.completed_at.isoformat() if latest.completed_at else None,
         }
@@ -2130,7 +2214,8 @@ def _get_performance_dashboard(**kwargs) -> Dict[str, Any]:
         {
             "execution_id": e.execution_id,
             "script_name": e.script.name if e.script else None,
-            "status": e.status,
+            "status": _status_cn(e, type(e)),
+        "status_code": e,
             "created_at": e.created_at.isoformat() if e.created_at else None,
         }
         for e in recent
@@ -2163,6 +2248,7 @@ def _list_performance_scheduled_tasks(**kwargs) -> Dict[str, Any]:
         "thread_count", "ramp_up", "duration", "realtime_enabled",
         "created_at", "updated_at",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -2180,6 +2266,7 @@ def _list_ops_environments(**kwargs) -> Dict[str, Any]:
         "id", "name", "access_method", "host", "port", "db_type", "db_host", "db_port",
         "db_name", "status", "created_at",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -2229,7 +2316,7 @@ def _text2sql_generate(**kwargs) -> Dict[str, Any]:
         record.generated_sql = sql.strip()
         record.status = "generated"
         record.save()
-        return {"record_id": record.id, "generated_sql": record.generated_sql, "status": record.status}
+        return {"record_id": record.id, "generated_sql": record.generated_sql, "status": _status_cn(record, type(record)), "status_code": record.status}
     except Exception as e:
         record.status = "failed"
         record.error_message = str(e)
@@ -2260,7 +2347,7 @@ def _text2sql_execute(**kwargs) -> Dict[str, Any]:
     }
     record.status = "executed"
     record.save()
-    return {"record_id": record.id, "sql": sql, "result": record.result, "status": record.status}
+    return {"record_id": record.id, "sql": sql, "result": record.result, "status": _status_cn(record, type(record)), "status_code": record.status}
 
 
 def _query_logs(**kwargs) -> Dict[str, Any]:
@@ -2315,6 +2402,7 @@ def _list_transfer_tasks(**kwargs) -> Dict[str, Any]:
     items = list(qs[:limit].values(
         "id", "name", "direction", "remote_path", "size", "status", "created_at",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -2355,7 +2443,8 @@ def _create_defect(**kwargs) -> Dict[str, Any]:
             "defect_id": defect.id,
             "title": defect.title,
             "severity": defect.severity,
-            "status": defect.status,
+            "status": _status_cn(defect, type(defect)),
+        "status_code": defect,
             "message": f"已创建 BUG #{defect.id}，请在问题管理页查看详情。",
         }
     except Exception as e:
@@ -2379,6 +2468,7 @@ def _list_defects(**kwargs) -> Dict[str, Any]:
     items = list(qs[:limit].values(
         "id", "title", "severity", "status", "project_id", "source", "created_at",
     ))
+    _localize_status(items, qs.model)
     return {"total": qs.count(), "items": items}
 
 
@@ -2412,7 +2502,8 @@ def _get_defect_detail(**kwargs) -> Dict[str, Any]:
         "title": defect.title,
         "description": defect.description,
         "severity": defect.severity,
-        "status": defect.status,
+        "status": _status_cn(defect, type(defect)),
+        "status_code": defect,
         "steps_to_reproduce": defect.steps_to_reproduce,
         "environment": defect.environment,
         "source": defect.source,

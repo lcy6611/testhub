@@ -50,7 +50,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getReports, downloadJtl, getExecutionReport, deleteExecution } from '@/api/performance'
+import { getReports, getExecutionReport, deleteExecution } from '@/api/performance'
 
 const reports = ref([])
 const loading = ref(false)
@@ -86,19 +86,16 @@ async function viewReport(id) {
   }
 }
 
-async function handleDownloadJtl(id) {
-  try {
-    const res = await downloadJtl(id)
-    const blob = new Blob([res.data], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${id}.jtl`
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error('下载失败')
-  }
+// 大文件（JTL 十几 MB）走浏览器原生下载 + ?token= 认证，避免 axios 超时 / 大 Blob 失败
+function handleDownloadJtl(id) {
+  const token = localStorage.getItem('access_token') || ''
+  const a = document.createElement('a')
+  a.href = `/api/performance-testing/executions/${id}/jtl_download/?token=${encodeURIComponent(token)}`
+  a.download = `${id}.jtl`
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 async function handleDeleteReport(id) {

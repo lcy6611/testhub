@@ -311,27 +311,6 @@ def execute(execution_id: str) -> None:
         _stop_monitor_thread()
         _collect_monitoring(running=False)
 
-        # 4. HTML 报告
-        try:
-            os.makedirs(report_dir, exist_ok=True)
-            # 4.1 JMeter 原生报告
-            subprocess.run(
-                [jm_cmd, "-g", jtl_path, "-o", report_dir],
-                capture_output=True, text=True, timeout=180, cwd=work_dir,
-            )
-            # 4.2 自定义 TestHub 报告（独立 HTML，内置 CDN 资源，避免 iframe 路径问题）
-            from .report_generator import generate_html_report
-            jmeter_index = os.path.join(report_dir, "index.html")
-            if os.path.exists(jmeter_index):
-                # 保留 JMeter 原生报告
-                os.rename(jmeter_index, os.path.join(report_dir, "index_jmeter.html"))
-            custom_index = os.path.join(report_dir, "index.html")
-            generate_html_report(execution, custom_index, jtl_path=jtl_path)
-            if os.path.exists(custom_index):
-                PerformanceExecution.objects.filter(pk=execution.pk).update(report_path=report_dir)
-        except Exception as exc:
-            logger.warning("HTML 报告生成失败（不阻塞）: %s", exc)
-
         # 5. JTL 解析 → summary + metrics
         parsed = parse_jtl(jtl_path)
         if parsed.get("error"):
@@ -381,8 +360,38 @@ def execute(execution_id: str) -> None:
             PerformanceMetric.objects.bulk_create(metric_objs)
 
         warn_msg = "; ".join(warnings) if warnings else ""
+        # 6. 终态先在内存实例上生效：报告里的「状态 / 结束时间」取的就是这个实例，
+        #    若不同步，报告会在 JMeter 结束后立刻生成却拿到仍为 RUNNING 的实例，
+        #    表现为「报告里状态还是执行中、结束时间缺失（回退成 JTL 推算时间）」，必须手动重新生成才正常。
+        finish_at = timezone.now()
+        execution.status = "COMPLETED"
+        execution.completed_at = finish_at
+        execution.error_message = warn_msg
+
+        # 7. HTML 报告（执行结束即自动生成，无需进详情页手动「重新生成报告」）
+        try:
+            os.makedirs(report_dir, exist_ok=True)
+            # 7.1 JMeter 原生报告
+            subprocess.run(
+                [jm_cmd, "-g", jtl_path, "-o", report_dir],
+                capture_output=True, text=True, timeout=180, cwd=work_dir,
+            )
+            # 7.2 自定义 TestHub 报告（独立 HTML，内置 CDN 资源，避免 iframe 路径问题）
+            from .report_generator import generate_html_report
+            jmeter_index = os.path.join(report_dir, "index.html")
+            if os.path.exists(jmeter_index):
+                # 保留 JMeter 原生报告
+                os.rename(jmeter_index, os.path.join(report_dir, "index_jmeter.html"))
+            custom_index = os.path.join(report_dir, "index.html")
+            generate_html_report(execution, custom_index, jtl_path=jtl_path)
+            if os.path.exists(custom_index):
+                PerformanceExecution.objects.filter(pk=execution.pk).update(report_path=report_dir)
+        except Exception as exc:
+            logger.warning("HTML 报告生成失败（不阻塞）: %s", exc)
+
+        # 8. 终态落库（报告已生成，前端刷新时状态与报告同步可见）
         PerformanceExecution.objects.filter(pk=execution.pk).update(
-            status="COMPLETED", completed_at=timezone.now(),
+            status="COMPLETED", completed_at=finish_at,
             error_message=warn_msg,
         )
         logger.info("性能执行完成 %s", execution_id)

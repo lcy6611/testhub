@@ -353,6 +353,10 @@
               <el-icon><Folder /></el-icon>
               <span>项目管理</span>
             </el-menu-item>
+            <el-menu-item index="/performance-testing/environments">
+              <el-icon><Setting /></el-icon>
+              <span>环境管理</span>
+            </el-menu-item>
             <el-menu-item index="/performance-testing/scripts">
               <el-icon><Edit /></el-icon>
               <span>脚本编排</span>
@@ -779,6 +783,7 @@ const breadcrumbTitle = computed(() => {
     // 性能测试
     '/performance-testing/dashboard': '数据看板',
     '/performance-testing/projects': '项目管理',
+    '/performance-testing/environments': '环境管理',
     '/performance-testing/scripts': '脚本编排',
     '/performance-testing/scripts/create': '新建脚本',
     '/performance-testing/executions': '执行记录',

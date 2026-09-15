@@ -674,6 +674,11 @@ const routes = [
         component: () => import('@/views/performance/ProjectManagement.vue')
       },
       {
+        path: 'environments',
+        name: 'PerfEnvironments',
+        component: () => import('@/views/performance/EnvironmentManagement.vue')
+      },
+      {
         path: 'scripts',
         name: 'PerfScriptEditor',
         component: () => import('@/views/performance/ScriptEditor.vue')

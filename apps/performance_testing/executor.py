@@ -20,7 +20,9 @@ from typing import Any, Dict, List, Optional, Set
 from django.conf import settings
 from django.utils import timezone
 
-from .models import PerformanceExecution, PerformanceMetric, PerformanceSummary, PerformanceConfig
+from .models import (
+    PerformanceExecution, PerformanceMetric, PerformanceSummary, PerformanceConfig,
+)
 from .jmx_builder import JMeterPlanBuilder, UploadedJMXPlanBuilder
 from .result_parser import parse_jtl
 
@@ -217,7 +219,9 @@ def execute(execution_id: str) -> None:
 
         # 1.5 复制 CSV 附件到工作目录，并检查是否齐全
         _copy_csv_files_to_work_dir(script, work_dir)
-        required_csv = _collect_csv_filenames(script.jmx_config or {})
+        # 生效配置：有环境快照用快照，否则用脚本自身配置
+        effective_config = execution.config_snapshot or script.jmx_config or {}
+        required_csv = _collect_csv_filenames(effective_config)
         missing = []
         for fname in required_csv:
             if not os.path.exists(os.path.join(work_dir, fname)):
@@ -268,7 +272,7 @@ def execute(execution_id: str) -> None:
                 pass
         else:
             jmx_path = JMeterPlanBuilder.build(
-                script.jmx_config or {},
+                effective_config,
                 thread_count=execution.thread_count,
                 ramp_up=execution.ramp_up,
                 duration=execution.duration,
@@ -438,11 +442,23 @@ def start_execution_background(execution_id: str) -> None:
     threading.Thread(target=execute, args=(execution_id,), daemon=True).start()
 
 
-def create_execution(script, *, created_by, thread_count=None, ramp_up=None, duration=None, realtime_enabled=None) -> PerformanceExecution:
-    """创建执行记录并后台启动。"""
+def create_execution(script, *, created_by, thread_count=None, ramp_up=None, duration=None,
+                     realtime_enabled=None, environment=None) -> PerformanceExecution:
+    """创建执行记录并后台启动。
+
+    指定 ``environment`` 时，会先把环境叠加到脚本配置上并存入 ``config_snapshot``，
+    执行阶段优先使用该快照（未指定环境则快照为空、照旧直接用脚本配置）。
+    """
     err = validate_load(thread_count or script.thread_count, duration or script.duration)
     if err:
         raise ValueError(err)
+
+    # 仅「显式指定环境」才做叠加：避免用户建了个激活环境就悄悄改写所有人的执行目标
+    snapshot = {}
+    if environment is not None:
+        from .environment import build_effective_config
+        snapshot = build_effective_config(script.jmx_config or {}, environment)
+
     execution = PerformanceExecution.objects.create(
         execution_id=f"PERF_{uuid.uuid4().hex[:12].upper()}",
         script=script,
@@ -451,6 +467,8 @@ def create_execution(script, *, created_by, thread_count=None, ramp_up=None, dur
         ramp_up=ramp_up or script.ramp_up,
         duration=duration or script.duration,
         realtime_enabled=realtime_enabled if realtime_enabled is not None else script.realtime_enabled,
+        environment=environment,
+        config_snapshot=snapshot,
         created_by=created_by,
     )
     start_execution_background(execution.execution_id)

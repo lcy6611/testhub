@@ -41,6 +41,7 @@ from .models import (
     PerformanceBatchExecution,
     PerformanceBaseline,
     PerformanceComparisonReport,
+    PerformanceEnvironment,
 )
 from .serializers import (
     PerformanceScriptSerializer,
@@ -58,6 +59,7 @@ from .serializers import (
     PerformanceBaselineSerializer,
     PerformanceComparisonReportSerializer,
     ComparisonReportCreateSerializer,
+    PerformanceEnvironmentSerializer,
 )
 from .executor import create_execution, validate_load, create_batch_execution
 from .influxdb_client import query_realtime, is_enabled as realtime_enabled
@@ -115,6 +117,13 @@ class PerformanceScriptViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
 
+        env = None
+        env_id = data.get("environment")
+        if env_id:
+            env = PerformanceEnvironment.objects.filter(pk=env_id).first()
+            if env is None:
+                return Response({"detail": "指定的执行环境不存在"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             execution = create_execution(
                 script,
@@ -123,6 +132,7 @@ class PerformanceScriptViewSet(viewsets.ModelViewSet):
                 ramp_up=data.get("ramp_up"),
                 duration=data.get("duration"),
                 realtime_enabled=data.get("realtime_enabled"),
+                environment=env,
             )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1308,3 +1318,29 @@ def _resolve_shared_execution(token: str):
     if not execution or not execution.share_enabled:
         raise Http404("分享链接无效或已过期")
     return execution
+
+
+class PerformanceEnvironmentViewSet(viewsets.ModelViewSet):
+    """压测环境：跨脚本复用的命名环境，支持同作用域内唯一激活。"""
+
+    queryset = PerformanceEnvironment.objects.select_related("project", "created_by").all()
+    serializer_class = PerformanceEnvironmentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["scope", "project", "is_active"]
+    search_fields = ["name", "base_url"]
+    ordering_fields = ["created_at", "updated_at"]
+    ordering = ["-is_active", "-updated_at"]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="set-active")
+    def set_active(self, request, pk=None):
+        """把该环境设为激活（同作用域互斥，由模型 save() 保证）。"""
+        env = self.get_object()
+        PerformanceEnvironment.objects.filter(pk=env.pk).update(is_active=True)
+        env.refresh_from_db()
+        # 触发互斥清理
+        env.save()
+        return Response(PerformanceEnvironmentSerializer(env).data)

@@ -252,3 +252,25 @@ export function shareExecutionLink(id, data) {
 export function revokeExecutionShareLink(id) {
   return request({ url: `/performance-testing/executions/${id}/revoke-share-link/`, method: 'post' })
 }
+
+// ==================== 压测环境 ====================
+
+export function getEnvironments(params) {
+  return request({ url: '/performance-testing/environments/', method: 'get', params })
+}
+
+export function createEnvironment(data) {
+  return request({ url: '/performance-testing/environments/', method: 'post', data })
+}
+
+export function updateEnvironment(id, data) {
+  return request({ url: `/performance-testing/environments/${id}/`, method: 'put', data })
+}
+
+export function deleteEnvironment(id) {
+  return request({ url: `/performance-testing/environments/${id}/`, method: 'delete' })
+}
+
+export function setActiveEnvironment(id) {
+  return request({ url: `/performance-testing/environments/${id}/set-active/`, method: 'post' })
+}

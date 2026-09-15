@@ -17,6 +17,7 @@ from .models import (
     PerformanceMonitorMetric,
     PerformanceBaseline,
     PerformanceComparisonReport,
+    PerformanceEnvironment,
 )
 
 
@@ -120,6 +121,7 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
     sla_result_display = serializers.CharField(source="get_sla_result_display", read_only=True)
     verdict_display = serializers.CharField(source="get_verdict_display", read_only=True)
     share_enabled = serializers.BooleanField(read_only=True)
+    environment_name = serializers.CharField(source="environment.name", read_only=True)
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
     has_report = serializers.SerializerMethodField()
     has_jtl = serializers.SerializerMethodField()
@@ -153,6 +155,8 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "verdict_details",
             "share_enabled",
             "share_expires_at",
+            "environment",
+            "environment_name",
             "started_at",
             "completed_at",
             "created_by",
@@ -175,6 +179,8 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "verdict_details",
             "share_token",
             "share_expires_at",
+            "environment",
+            "config_snapshot",
             "started_at",
             "completed_at",
             "created_at",
@@ -226,6 +232,8 @@ class ExecutionCreateSerializer(serializers.Serializer):
     ramp_up = serializers.IntegerField(required=False, min_value=0)
     duration = serializers.IntegerField(required=False, min_value=1)
     realtime_enabled = serializers.BooleanField(required=False)
+    # 执行环境（可选）：指定后用该环境叠加 base_url / 请求头 / 变量
+    environment = serializers.IntegerField(required=False, allow_null=True)
 
 
 class JmxImportSerializer(serializers.Serializer):
@@ -405,3 +413,55 @@ class ComparisonReportCreateSerializer(serializers.Serializer):
     execution_ids = serializers.ListField(child=serializers.IntegerField(), min_length=2, max_length=5)
     reference_execution_id = serializers.IntegerField(required=False, allow_null=True)
     with_ai = serializers.BooleanField(required=False, default=True)
+
+
+class PerformanceEnvironmentSerializer(serializers.ModelSerializer):
+    """压测环境。"""
+
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    scope_display = serializers.CharField(source="get_scope_display", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.username", read_only=True)
+
+    class Meta:
+        model = PerformanceEnvironment
+        fields = [
+            "id",
+            "name",
+            "scope",
+            "scope_display",
+            "project",
+            "project_name",
+            "base_url",
+            "headers",
+            "verify_ssl",
+            "variables",
+            "is_active",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        scope = attrs.get("scope") or (self.instance.scope if self.instance else "PROJECT")
+        project = attrs.get("project") if "project" in attrs else (self.instance.project if self.instance else None)
+        if scope == "PROJECT" and not project:
+            raise serializers.ValidationError({"project": "项目环境必须选择关联项目"})
+        return attrs
+
+    def validate_variables(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("环境变量必须是列表")
+        for i, item in enumerate(value):
+            if not isinstance(item, dict) or not (item.get("name") or "").strip():
+                raise serializers.ValidationError(f"第 {i + 1} 个变量缺少 name")
+        return value
+
+    def validate_headers(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("全局请求头必须是对象 {名称: 值}")
+        return value

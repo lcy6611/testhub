@@ -511,6 +511,27 @@
       </template>
     </el-dialog>
   </div>
+  <!-- 执行确认（可选择执行环境） -->
+  <el-dialog v-model="execDialogVisible" title="执行确认" width="520px">
+    <div class="exec-tip">将立即触发一次压测执行。</div>
+    <el-form label-width="90px" style="margin-top: 12px">
+      <el-form-item label="执行环境">
+        <el-select v-model="execEnvironment" clearable placeholder="不使用环境（按脚本原配置）" style="width: 100%">
+          <el-option
+            v-for="e in environments"
+            :key="e.id"
+            :label="`${e.name}${e.scope_display ? ' · ' + e.scope_display : ''}${e.is_active ? ' (激活)' : ''}`"
+            :value="e.id"
+          />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <div class="exec-hint">选择环境后，脚本内各请求 URL 的域名会被替换为该环境的基础地址，环境变量同名覆盖脚本变量。</div>
+    <template #footer>
+      <el-button @click="execDialogVisible = false">取消</el-button>
+      <el-button type="success" :loading="executing" @click="confirmExecute">确定执行</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -522,7 +543,7 @@ import {
 } from '@element-plus/icons-vue'
 import {
   getScripts, getScript, createScript, updateScript, deleteScript,
-  executeScript, checkJmx, importJmx, exportJmx as exportJmxApi, getProjects, getLoadLimits,
+  executeScript, checkJmx, importJmx, exportJmx as exportJmxApi, getProjects, getLoadLimits, getEnvironments,
   parseJmxToOnline,
   uploadScriptCsvFiles, getScriptCsvFiles, deleteScriptCsvFile
 } from '@/api/performance'
@@ -1020,16 +1041,42 @@ async function handleSave(opts = {}) {
   }
 }
 
+const execDialogVisible = ref(false)
+const execEnvironment = ref(null)
+const environments = ref([])
+
+async function loadEnvironments() {
+  try {
+    const res = await getEnvironments({ page_size: 200 })
+    environments.value = res.data?.results || res.data || []
+  } catch (e) {
+    environments.value = []
+  }
+}
+
+// 默认选中：脚本所属项目的激活环境优先，其次全局激活环境
+function defaultEnvId() {
+  const myProjects = form.projects || []
+  const projectEnv = environments.value.find(
+    (e) => e.is_active && e.scope === 'PROJECT' && myProjects.includes(e.project)
+  )
+  if (projectEnv) return projectEnv.id
+  const globalEnv = environments.value.find((e) => e.is_active && e.scope === 'GLOBAL')
+  return globalEnv ? globalEnv.id : null
+}
+
 async function handleExecute() {
   if (!currentScriptId.value) {
     ElMessage.warning('请先保存脚本')
     return
   }
-  try {
-    await ElMessageBox.confirm('确定要立即执行该性能脚本吗？', '执行确认', { type: 'warning' })
-  } catch {
-    return
-  }
+  await loadEnvironments()
+  execEnvironment.value = defaultEnvId()
+  execDialogVisible.value = true
+}
+
+async function confirmExecute() {
+  execDialogVisible.value = false
   executing.value = true
   try {
     // 执行前先自动保存，确保 jmx_config（线程组的 thread_count/ramp_up/duration/loops）
@@ -1044,6 +1091,7 @@ async function handleExecute() {
       duration: tg.duration,
       loops: tg.loops,
     }
+    if (execEnvironment.value) overrides.environment = execEnvironment.value
     const res = await executeScript(currentScriptId.value, overrides)
     ElMessage.success(`执行已触发，执行ID: ${res.data.execution_id}`)
     router.push(`/performance-testing/executions/${res.data.id}`)
@@ -1072,6 +1120,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.exec-tip { font-size: 13px; color: #606266; }
+.exec-hint { font-size: 12px; color: #909399; line-height: 1.6; margin-top: 4px; }
 .script-editor-page {
   background: #f5f7fa;
 }

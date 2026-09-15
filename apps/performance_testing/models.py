@@ -201,6 +201,14 @@ class PerformanceExecution(models.Model):
     )
     verdict_details = models.JSONField(default=list, blank=True, verbose_name="验收明细")
 
+    # 执行环境（可选）：非空时执行使用其叠加出的 config_snapshot
+    environment = models.ForeignKey(
+        "PerformanceEnvironment", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="executions", verbose_name="执行环境",
+    )
+    # 生效配置快照：环境叠加后的 jmx_config（为空表示未使用环境、直接用脚本配置）
+    config_snapshot = models.JSONField(default=dict, blank=True, verbose_name="生效配置快照")
+
     # 报告分享直链：token 即凭证，可在无登录态下只读打开报告
     share_token = models.CharField(
         max_length=64, blank=True, null=True, unique=True, verbose_name="分享令牌"
@@ -513,3 +521,51 @@ class PerformanceComparisonReport(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class PerformanceEnvironment(models.Model):
+    """压测环境：跨脚本复用的命名环境（一套 base_url / 请求头 / 变量）。
+
+    解决同一套接口在 dev/staging/prod 等多环境压测时反复手工改 URL 的问题。
+    """
+
+    SCOPE_CHOICES = [
+        ("GLOBAL", "全局环境"),
+        ("PROJECT", "项目环境"),
+    ]
+
+    name = models.CharField(max_length=200, verbose_name="环境名称")
+    scope = models.CharField(max_length=10, choices=SCOPE_CHOICES, default="PROJECT", verbose_name="作用域")
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="perf_environments", verbose_name="关联项目",
+    )
+    base_url = models.CharField(max_length=500, blank=True, default="", verbose_name="基础地址")
+    headers = models.JSONField(default=dict, blank=True, verbose_name="全局请求头")
+    verify_ssl = models.BooleanField(default=False, verbose_name="校验 SSL 证书")
+    variables = models.JSONField(default=list, blank=True, verbose_name="环境变量")
+    is_active = models.BooleanField(default=False, verbose_name="是否激活")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="perf_environments", verbose_name="创建者",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "perf_environment"
+        verbose_name = "压测环境"
+        verbose_name_plural = "压测环境"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_scope_display()})"
+
+    def save(self, *args, **kwargs):
+        """保证同作用域内只有一个激活环境（GLOBAL 全局唯一；PROJECT 每项目唯一）。"""
+        super().save(*args, **kwargs)
+        if self.is_active:
+            qs = PerformanceEnvironment.objects.filter(scope=self.scope, is_active=True)
+            if self.scope == "PROJECT":
+                qs = qs.filter(project=self.project)
+            qs.exclude(pk=self.pk).update(is_active=False)

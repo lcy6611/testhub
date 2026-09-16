@@ -46,6 +46,10 @@ const DEFAULT_HERMES_AVATAR = true
 const DEFAULT_HERMES_EYE = true
 const DEFAULT_HERMES_EYE_STYLE = 'warrior'
 
+// 首页主标题 / 副标题（外观设置里可由用户自定义）
+export const DEFAULT_HOME_TITLE = 'TestHub 测试平台'
+export const DEFAULT_HOME_SUBTITLE = '一站式智能化测试解决方案'
+
 // Hermes 眼睛风格可选值
 export const HERMES_EYE_STYLES = [
   { value: 'warrior', label: '战斗眼（橙红）' },
@@ -76,6 +80,10 @@ export const useThemeStore = defineStore('theme', () => {
   // Hermes 眼睛风格：warrior | gundam | awaken | ironman | hud
   const hermesEyeStyle = ref(DEFAULT_HERMES_EYE_STYLE)
 
+  // 首页标题（空字符串表示不显示该行）
+  const homeTitle = ref(DEFAULT_HOME_TITLE)
+  const homeSubtitle = ref(DEFAULT_HOME_SUBTITLE)
+
   // 临时记忆「直接显示壁纸」关闭前的用户自定义值
   let lastCustomOpacity = DEFAULT_PANEL_OPACITY
   let lastCustomBlur = DEFAULT_PANEL_BLUR
@@ -97,6 +105,8 @@ export const useThemeStore = defineStore('theme', () => {
       hermesAvatarEnabled.value = o.hermesAvatarEnabled !== undefined ? !!o.hermesAvatarEnabled : DEFAULT_HERMES_AVATAR
       hermesEyeEnabled.value = o.hermesEyeEnabled !== undefined ? !!o.hermesEyeEnabled : DEFAULT_HERMES_EYE
       hermesEyeStyle.value = o.hermesEyeStyle && typeof o.hermesEyeStyle === 'string' ? o.hermesEyeStyle : DEFAULT_HERMES_EYE_STYLE
+      homeTitle.value = typeof o.homeTitle === 'string' ? o.homeTitle : DEFAULT_HOME_TITLE
+      homeSubtitle.value = typeof o.homeSubtitle === 'string' ? o.homeSubtitle : DEFAULT_HOME_SUBTITLE
       if (transparentMode.value) {
         lastCustomOpacity = typeof o.lastCustomOpacity === 'number' ? o.lastCustomOpacity : DEFAULT_PANEL_OPACITY
         lastCustomBlur = typeof o.lastCustomBlur === 'number' ? o.lastCustomBlur : DEFAULT_PANEL_BLUR
@@ -122,6 +132,8 @@ export const useThemeStore = defineStore('theme', () => {
         hermesAvatarEnabled: hermesAvatarEnabled.value,
         hermesEyeEnabled: hermesEyeEnabled.value,
         hermesEyeStyle: hermesEyeStyle.value,
+        homeTitle: homeTitle.value,
+        homeSubtitle: homeSubtitle.value,
         lastCustomOpacity,
         lastCustomBlur,
         lastCustomDim,
@@ -201,6 +213,8 @@ export const useThemeStore = defineStore('theme', () => {
         if (data.hermes_eye_style && typeof data.hermes_eye_style === 'string') {
           hermesEyeStyle.value = data.hermes_eye_style
         }
+        if (typeof data.home_title === 'string') homeTitle.value = data.home_title
+        if (typeof data.home_subtitle === 'string') homeSubtitle.value = data.home_subtitle
         applyTheme()
       }
     } catch (e) {
@@ -224,6 +238,8 @@ export const useThemeStore = defineStore('theme', () => {
         hermes_avatar_enabled: hermesAvatarEnabled.value,
         hermes_eye_enabled: hermesEyeEnabled.value,
         hermes_eye_style: hermesEyeStyle.value,
+        home_title: homeTitle.value,
+        home_subtitle: homeSubtitle.value,
       })
     } catch (e) {
       /* 离线也可本地生效 */
@@ -313,6 +329,17 @@ export const useThemeStore = defineStore('theme', () => {
     save()
   }
 
+  // 首页标题/副标题（空字符串 = 不显示该行）
+  function setHomeTitle(v) {
+    homeTitle.value = typeof v === 'string' ? v : ''
+    save()
+  }
+
+  function setHomeSubtitle(v) {
+    homeSubtitle.value = typeof v === 'string' ? v : ''
+    save()
+  }
+
   function reset() {
     mode.value = DEFAULT_MODE
     primary.value = DEFAULT_PRIMARY
@@ -325,6 +352,8 @@ export const useThemeStore = defineStore('theme', () => {
     lastCustomOpacity = DEFAULT_PANEL_OPACITY
     lastCustomBlur = DEFAULT_PANEL_BLUR
     lastCustomDim = DEFAULT_WALLPAPER_DIM
+    homeTitle.value = DEFAULT_HOME_TITLE
+    homeSubtitle.value = DEFAULT_HOME_SUBTITLE
     save()
   }
 
@@ -340,6 +369,10 @@ export const useThemeStore = defineStore('theme', () => {
     hermesAvatarEnabled,
     hermesEyeEnabled,
     hermesEyeStyle,
+    homeTitle,
+    homeSubtitle,
+    setHomeTitle,
+    setHomeSubtitle,
     setHermesAvatarEnabled,
     setHermesEyeEnabled,
     setHermesEyeStyle,

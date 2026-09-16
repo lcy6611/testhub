@@ -15,8 +15,8 @@
           </template>
         </el-dropdown>
       </div>
-      <h1 class="main-title">TestHub 测试平台</h1>
-      <p class="subtitle">一站式智能化测试解决方案</p>
+      <h1 v-if="themeStore.homeTitle" class="main-title">{{ themeStore.homeTitle }}</h1>
+      <p v-if="themeStore.homeSubtitle" class="subtitle">{{ themeStore.homeSubtitle }}</p>
       
       <div class="cards-container">
         <!-- AI用例生成 -->
@@ -156,11 +156,14 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useThemeStore } from '@/stores/theme'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MagicStick, Link, Monitor, DataLine, Cpu, Setting, ChatDotRound, UserFilled, ArrowDown, Tools, Warning, DataBoard } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+// 首页标题来自外观设置（可在「外观与皮肤设置」里自定义）
+const themeStore = useThemeStore()
 
 const handleCommand = (command) => {
   if (command === 'logout') {

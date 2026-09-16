@@ -134,7 +134,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['GET', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def ui_settings_view(request):
-    """获取/更新当前用户的界面偏好（主题模式、主题色、皮肤、壁纸）"""
+    """获取/更新当前用户的界面偏好（主题模式、主题色、皮肤、壁纸、首页标题）"""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
     if request.method == 'GET':
@@ -146,7 +146,13 @@ def ui_settings_view(request):
         return Response({'error': '请求数据格式不正确'}, status=status.HTTP_400_BAD_REQUEST)
 
     current = profile.ui_settings or {}
-    allowed_keys = {'mode', 'primary', 'skin', 'wallpaper', 'wallpaperFit', 'reducedMotion', 'hermes_avatar_enabled', 'hermes_eye_enabled', 'hermes_eye_style'}
+    allowed_keys = {'mode', 'primary', 'skin', 'wallpaper', 'wallpaperFit', 'reducedMotion',
+                     'hermes_avatar_enabled', 'hermes_eye_enabled', 'hermes_eye_style',
+                     # 面板/壁纸显示参数：前端 store 的 save() 一直在发这几个键、initTheme 也在读，
+                     # 但此前不在白名单里 → 从未落库，只在 localStorage，换设备就丢
+                     'panelOpacity', 'panelBlur', 'wallpaperDim', 'transparentMode',
+                     # 首页标题/副标题：允许用户自定义展示文案
+                     'home_title', 'home_subtitle'}
     for k, v in incoming.items():
         if k in allowed_keys:
             current[k] = v

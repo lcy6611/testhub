@@ -26,6 +26,51 @@
         </div>
       </el-card>
 
+      <!-- 首页标题自定义 -->
+      <el-card class="block-card home-title-card">
+        <template #header>
+          <div class="skin-header">
+            <span>首页标题</span>
+            <el-button size="small" @click="onResetHomeTitle">恢复默认文案</el-button>
+          </div>
+        </template>
+
+        <div class="effect-row">
+          <div class="effect-label">主标题</div>
+          <el-input
+            v-model="homeTitleDraft"
+            maxlength="40"
+            show-word-limit
+            clearable
+            placeholder="留空则首页不显示主标题"
+            @change="commitHomeTitle"
+            @clear="commitHomeTitle"
+          />
+        </div>
+
+        <div class="effect-row">
+          <div class="effect-label">副标题</div>
+          <el-input
+            v-model="homeSubtitleDraft"
+            maxlength="60"
+            show-word-limit
+            clearable
+            placeholder="留空则首页不显示副标题"
+            @change="commitHomeSubtitle"
+            @clear="commitHomeSubtitle"
+          />
+        </div>
+
+        <div class="home-title-hint">
+          <span class="hint-label">首页预览：</span>
+          <div class="hint-preview">
+            <div class="hint-h1">{{ homeTitleDraft || '（不显示主标题）' }}</div>
+            <div class="hint-p2">{{ homeSubtitleDraft || '（不显示副标题）' }}</div>
+          </div>
+        </div>
+        <div class="hint-tip">输入后按回车或点击别处即生效；留空表示首页不展示该行。</div>
+      </el-card>
+
       <el-row :gutter="20">
         <!-- 主题模式 + 主题色 -->
         <el-col :span="8">
@@ -186,14 +231,32 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useThemeStore } from '@/stores/theme'
+import { DEFAULT_HOME_SUBTITLE, DEFAULT_HOME_TITLE, useThemeStore } from '@/stores/theme'
 import { SKIN_CATEGORIES, SKINS } from '@/theme/skins'
 import { uploadWallpaper } from '@/api/users'
 
 const themeStore = useThemeStore()
 const activeCat = ref('all')
+
+// 首页标题：用本地草案编辑，失焦/回车再提交，避免每敲一个字就打一次接口
+const homeTitleDraft = ref(themeStore.homeTitle)
+const homeSubtitleDraft = ref(themeStore.homeSubtitle)
+watch(() => themeStore.homeTitle, (v) => { homeTitleDraft.value = v })
+watch(() => themeStore.homeSubtitle, (v) => { homeSubtitleDraft.value = v })
+
+function commitHomeTitle() {
+  themeStore.setHomeTitle((homeTitleDraft.value || '').trim())
+}
+function commitHomeSubtitle() {
+  themeStore.setHomeSubtitle((homeSubtitleDraft.value || '').trim())
+}
+function onResetHomeTitle() {
+  themeStore.setHomeTitle(DEFAULT_HOME_TITLE)
+  themeStore.setHomeSubtitle(DEFAULT_HOME_SUBTITLE)
+  ElMessage.success('首页标题已恢复默认')
+}
 
 const primaryPresets = [
   '#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#9b59b6',
@@ -372,6 +435,53 @@ async function handleUpload(option) {
     color: var(--app-text-secondary, #909399);
     margin-right: 8px;
   }
+}
+
+.home-title-card {
+  margin-bottom: 20px;
+}
+
+.home-title-hint {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 4px;
+
+  .hint-label {
+    width: 90px;
+    font-size: 13px;
+    color: var(--app-text-secondary, #909399);
+    flex-shrink: 0;
+    line-height: 34px;
+  }
+
+  .hint-preview {
+    flex: 1;
+    border: 1px dashed var(--el-border-color, #dcdfe6);
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-align: center;
+    background: var(--el-fill-color-lighter, #fafafa);
+
+    .hint-h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--app-text, #303133);
+      letter-spacing: 1px;
+    }
+
+    .hint-p2 {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--app-text-secondary, #909399);
+    }
+  }
+}
+
+.hint-tip {
+  margin-top: 8px;
+  padding-left: 90px;
+  font-size: 12px;
+  color: var(--app-text-secondary, #909399);
 }
 
 .skin-header {

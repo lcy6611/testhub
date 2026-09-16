@@ -102,6 +102,17 @@ class TargetsEvalTests(SimpleTestCase):
         )
         self.assertEqual(verdict, "PASSED")
 
+    def test_all_none_targets_not_evaluated(self):
+        # 前端未填阈值时会保存成 {"max_p95_rt": None, ...}：非空 dict 但无可判定项，
+        # 不能因此判为「通过」（历史 bug：错误率 100% 也显示通过）。
+        verdict, details = targets_eval.evaluate_targets(
+            {"max_p95_rt": None, "max_avg_rt": None, "min_tps": None, "max_error_rate": None},
+            [{"sample_label": "A", "p95": 100, "avg": 50, "error_rate": 100}],
+            {"throughput": 10},
+        )
+        self.assertEqual(verdict, "NOT_EVALUATED")
+        self.assertEqual(details, [])
+
 
 class AcceptanceAggregateTests(SimpleTestCase):
     def test_both_dimensions_are_returned(self):

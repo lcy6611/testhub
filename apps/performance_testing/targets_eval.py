@@ -96,4 +96,10 @@ def evaluate_targets(perf_targets: Optional[Dict[str, Any]],
             "result": "PASS" if ok else "FAIL",
         })
 
+    # 配置里存在键但阈值全为 None（如前端表单未填时保存的
+    # {"max_p95_rt": None, ...}）时，没有任何可判定项：应与「未配置」同样视为
+    # NOT_EVALUATED，否则空明细会被误判为「通过」（与 sla.evaluate 的保护对齐）。
+    if not details:
+        return NOT_EVALUATED, []
+
     return (FAILED if has_fail else PASSED), details

@@ -9,7 +9,7 @@ from django.core.files.storage import default_storage
 from django.contrib.auth import login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from .models import User, UserProfile
+from .models import User, UserProfile, PlatformConfig
 from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer, UserProfileSerializer
 
 # JWT 相关导入
@@ -134,7 +134,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['GET', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def ui_settings_view(request):
-    """获取/更新当前用户的界面偏好（主题模式、主题色、皮肤、壁纸、首页标题）"""
+    """获取/更新当前用户的界面偏好（主题模式、主题色、皮肤、壁纸等；首页标题已迁移为平台级全局配置）"""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
     if request.method == 'GET':
@@ -150,15 +150,40 @@ def ui_settings_view(request):
                      'hermes_avatar_enabled', 'hermes_eye_enabled', 'hermes_eye_style',
                      # 面板/壁纸显示参数：前端 store 的 save() 一直在发这几个键、initTheme 也在读，
                      # 但此前不在白名单里 → 从未落库，只在 localStorage，换设备就丢
-                     'panelOpacity', 'panelBlur', 'wallpaperDim', 'transparentMode',
-                     # 首页标题/副标题：允许用户自定义展示文案
-                     'home_title', 'home_subtitle'}
+                     'panelOpacity', 'panelBlur', 'wallpaperDim', 'transparentMode'}
     for k, v in incoming.items():
         if k in allowed_keys:
             current[k] = v
     profile.ui_settings = current
     profile.save()
     return Response(profile.ui_settings)
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([permissions.AllowAny])
+def platform_config_view(request):
+    """平台级全局配置（首页标题/副标题、浏览器页签标题）：可匿名读（登录页也要显示自定义页签标题），仅超级管理员可写"""
+    cfg = PlatformConfig.get_singleton()
+
+    if request.method == 'GET':
+        return Response(cfg.config or {})
+
+    # PATCH：仅管理员可写
+    if not request.user.is_superuser:
+        return Response({'error': '仅管理员可修改平台配置'}, status=status.HTTP_403_FORBIDDEN)
+
+    incoming = request.data
+    if not isinstance(incoming, dict):
+        return Response({'error': '请求数据格式不正确'}, status=status.HTTP_400_BAD_REQUEST)
+
+    current = cfg.config or {} if isinstance(cfg.config, dict) else {}
+    allowed_keys = {'home_title', 'home_subtitle', 'browser_title'}
+    for k, v in incoming.items():
+        if k in allowed_keys:
+            current[k] = v
+    cfg.config = current
+    cfg.save()
+    return Response(cfg.config)
 
 
 @api_view(['POST'])

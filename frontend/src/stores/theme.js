@@ -50,6 +50,9 @@ const DEFAULT_HERMES_EYE_STYLE = 'warrior'
 export const DEFAULT_HOME_TITLE = 'TestHub 测试平台'
 export const DEFAULT_HOME_SUBTITLE = '一站式智能化测试解决方案'
 
+// 浏览器页签标题（<title>），平台级全局配置
+export const DEFAULT_BROWSER_TITLE = 'TestHub - AI一体化测试平台'
+
 // Hermes 眼睛风格可选值
 export const HERMES_EYE_STYLES = [
   { value: 'warrior', label: '战斗眼（橙红）' },
@@ -83,6 +86,9 @@ export const useThemeStore = defineStore('theme', () => {
   // 首页标题（空字符串表示不显示该行）
   const homeTitle = ref(DEFAULT_HOME_TITLE)
   const homeSubtitle = ref(DEFAULT_HOME_SUBTITLE)
+
+  // 浏览器页签标题（空字符串时回退到默认，避免出现无标题页签）
+  const browserTitle = ref(DEFAULT_BROWSER_TITLE)
 
   // 临时记忆「直接显示壁纸」关闭前的用户自定义值
   let lastCustomOpacity = DEFAULT_PANEL_OPACITY
@@ -132,8 +138,6 @@ export const useThemeStore = defineStore('theme', () => {
         hermesAvatarEnabled: hermesAvatarEnabled.value,
         hermesEyeEnabled: hermesEyeEnabled.value,
         hermesEyeStyle: hermesEyeStyle.value,
-        homeTitle: homeTitle.value,
-        homeSubtitle: homeSubtitle.value,
         lastCustomOpacity,
         lastCustomBlur,
         lastCustomDim,
@@ -143,6 +147,8 @@ export const useThemeStore = defineStore('theme', () => {
 
   // 将当前主题应用到 DOM（Element Plus 变量 + body 背景 + 玻璃面板）
   function applyTheme() {
+    // 浏览器页签标题（留空回退默认）
+    document.title = browserTitle.value || DEFAULT_BROWSER_TITLE
     const root = document.documentElement
     const dark = mode.value === 'dark'
     root.classList.toggle('theme-dark', dark)
@@ -213,12 +219,22 @@ export const useThemeStore = defineStore('theme', () => {
         if (data.hermes_eye_style && typeof data.hermes_eye_style === 'string') {
           hermesEyeStyle.value = data.hermes_eye_style
         }
-        if (typeof data.home_title === 'string') homeTitle.value = data.home_title
-        if (typeof data.home_subtitle === 'string') homeSubtitle.value = data.home_subtitle
         applyTheme()
       }
     } catch (e) {
       /* 未登录或失败，使用本地缓存 */
+    }
+    // 平台级全局配置（首页标题/副标题，仅管理员可改，对所有用户生效）
+    try {
+      const { data: pc } = await api.get('/users/platform-config/')
+      if (pc && typeof pc === 'object') {
+        if (typeof pc.home_title === 'string') homeTitle.value = pc.home_title
+        if (typeof pc.home_subtitle === 'string') homeSubtitle.value = pc.home_subtitle
+        if (typeof pc.browser_title === 'string') browserTitle.value = pc.browser_title
+        applyTheme()
+      }
+    } catch (e) {
+      /* 忽略 */
     }
   }
 
@@ -238,8 +254,6 @@ export const useThemeStore = defineStore('theme', () => {
         hermes_avatar_enabled: hermesAvatarEnabled.value,
         hermes_eye_enabled: hermesEyeEnabled.value,
         hermes_eye_style: hermesEyeStyle.value,
-        home_title: homeTitle.value,
-        home_subtitle: homeSubtitle.value,
       })
     } catch (e) {
       /* 离线也可本地生效 */
@@ -329,18 +343,40 @@ export const useThemeStore = defineStore('theme', () => {
     save()
   }
 
-  // 首页标题/副标题（空字符串 = 不显示该行）
-  function setHomeTitle(v) {
-    homeTitle.value = typeof v === 'string' ? v : ''
-    save()
+  // 首页标题/副标题：平台级全局配置，仅管理员可改（走 /users/platform-config/）
+  async function setHomeTitle(v) {
+    const val = typeof v === 'string' ? v : ''
+    homeTitle.value = val
+    try {
+      await api.patch('/users/platform-config/', { home_title: val })
+    } catch (e) {
+      /* 失败静默：仅管理员可写，普通用户不会调用到此处 */
+    }
   }
 
-  function setHomeSubtitle(v) {
-    homeSubtitle.value = typeof v === 'string' ? v : ''
-    save()
+  async function setHomeSubtitle(v) {
+    const val = typeof v === 'string' ? v : ''
+    homeSubtitle.value = val
+    try {
+      await api.patch('/users/platform-config/', { home_subtitle: val })
+    } catch (e) {
+      /* 失败静默 */
+    }
   }
 
-  function reset() {
+  // 浏览器页签标题：平台级全局配置，仅管理员可改
+  async function setBrowserTitle(v) {
+    const val = typeof v === 'string' ? v : ''
+    browserTitle.value = val
+    applyTheme()
+    try {
+      await api.patch('/users/platform-config/', { browser_title: val })
+    } catch (e) {
+      /* 失败静默：仅管理员可写，普通用户不会调用到此处 */
+    }
+  }
+
+  async function reset() {
     mode.value = DEFAULT_MODE
     primary.value = DEFAULT_PRIMARY
     skin.value = ''
@@ -352,9 +388,11 @@ export const useThemeStore = defineStore('theme', () => {
     lastCustomOpacity = DEFAULT_PANEL_OPACITY
     lastCustomBlur = DEFAULT_PANEL_BLUR
     lastCustomDim = DEFAULT_WALLPAPER_DIM
-    homeTitle.value = DEFAULT_HOME_TITLE
-    homeSubtitle.value = DEFAULT_HOME_SUBTITLE
-    save()
+    await save()
+    // 首页标题/副标题为平台级全局配置，随外观一起恢复默认（仅管理员生效）
+    await setHomeTitle(DEFAULT_HOME_TITLE)
+    await setHomeSubtitle(DEFAULT_HOME_SUBTITLE)
+    await setBrowserTitle(DEFAULT_BROWSER_TITLE)
   }
 
   return {
@@ -371,8 +409,10 @@ export const useThemeStore = defineStore('theme', () => {
     hermesEyeStyle,
     homeTitle,
     homeSubtitle,
+    browserTitle,
     setHomeTitle,
     setHomeSubtitle,
+    setBrowserTitle,
     setHermesAvatarEnabled,
     setHermesEyeEnabled,
     setHermesEyeStyle,

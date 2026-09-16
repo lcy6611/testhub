@@ -30,3 +30,19 @@ class UserProfile(models.Model):
         db_table = 'user_profiles'
         verbose_name = '用户配置'
         verbose_name_plural = '用户配置'
+
+
+class PlatformConfig(models.Model):
+    """平台级全局配置（首页标题/副标题等，仅管理员可改，对所有用户生效）"""
+    config = models.JSONField(default=dict, verbose_name='全局配置')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'platform_config'
+        verbose_name = '平台配置'
+        verbose_name_plural = '平台配置'
+
+    @classmethod
+    def get_singleton(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

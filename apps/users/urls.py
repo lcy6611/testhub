@@ -13,5 +13,6 @@ urlpatterns = [
     path('users/<int:pk>/', views.UserDetailView.as_view(), name='user-detail'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('ui-settings/', views.ui_settings_view, name='ui-settings'),
+    path('platform-config/', views.platform_config_view, name='platform-config'),
     path('wallpaper/upload/', views.wallpaper_upload_view, name='wallpaper-upload'),
 ]

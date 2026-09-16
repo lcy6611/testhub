@@ -26,11 +26,11 @@
         </div>
       </el-card>
 
-      <!-- 首页标题自定义 -->
-      <el-card class="block-card home-title-card">
+      <!-- 首页标题自定义（仅管理员可配置平台级标题） -->
+      <el-card v-if="isAdmin" class="block-card home-title-card">
         <template #header>
           <div class="skin-header">
-            <span>首页标题</span>
+            <span>首页标题 / 页签标题</span>
             <el-button size="small" @click="onResetHomeTitle">恢复默认文案</el-button>
           </div>
         </template>
@@ -61,6 +61,19 @@
           />
         </div>
 
+        <div class="effect-row">
+          <div class="effect-label">页签标题</div>
+          <el-input
+            v-model="browserTitleDraft"
+            maxlength="60"
+            show-word-limit
+            clearable
+            placeholder="浏览器标签页上显示的标题"
+            @change="commitBrowserTitle"
+            @clear="commitBrowserTitle"
+          />
+        </div>
+
         <div class="home-title-hint">
           <span class="hint-label">首页预览：</span>
           <div class="hint-preview">
@@ -68,7 +81,9 @@
             <div class="hint-p2">{{ homeSubtitleDraft || '（不显示副标题）' }}</div>
           </div>
         </div>
-        <div class="hint-tip">输入后按回车或点击别处即生效；留空表示首页不展示该行。</div>
+        <div class="hint-tip">
+          输入后按回车或点击别处即生效；首页主/副标题留空表示不展示该行，页签标题留空则使用默认标题「{{ DEFAULT_BROWSER_TITLE }}」。
+        </div>
       </el-card>
 
       <el-row :gutter="20">
@@ -231,20 +246,25 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { DEFAULT_HOME_SUBTITLE, DEFAULT_HOME_TITLE, useThemeStore } from '@/stores/theme'
+import { DEFAULT_BROWSER_TITLE, DEFAULT_HOME_SUBTITLE, DEFAULT_HOME_TITLE, useThemeStore } from '@/stores/theme'
 import { SKIN_CATEGORIES, SKINS } from '@/theme/skins'
 import { uploadWallpaper } from '@/api/users'
+import { useUserStore } from '@/stores/user'
 
 const themeStore = useThemeStore()
+const userStore = useUserStore()
+const isAdmin = computed(() => !!userStore.user?.is_superuser)
 const activeCat = ref('all')
 
 // 首页标题：用本地草案编辑，失焦/回车再提交，避免每敲一个字就打一次接口
 const homeTitleDraft = ref(themeStore.homeTitle)
 const homeSubtitleDraft = ref(themeStore.homeSubtitle)
+const browserTitleDraft = ref(themeStore.browserTitle)
 watch(() => themeStore.homeTitle, (v) => { homeTitleDraft.value = v })
 watch(() => themeStore.homeSubtitle, (v) => { homeSubtitleDraft.value = v })
+watch(() => themeStore.browserTitle, (v) => { browserTitleDraft.value = v })
 
 function commitHomeTitle() {
   themeStore.setHomeTitle((homeTitleDraft.value || '').trim())
@@ -252,11 +272,27 @@ function commitHomeTitle() {
 function commitHomeSubtitle() {
   themeStore.setHomeSubtitle((homeSubtitleDraft.value || '').trim())
 }
+function commitBrowserTitle() {
+  themeStore.setBrowserTitle((browserTitleDraft.value || '').trim())
+}
 function onResetHomeTitle() {
   themeStore.setHomeTitle(DEFAULT_HOME_TITLE)
   themeStore.setHomeSubtitle(DEFAULT_HOME_SUBTITLE)
-  ElMessage.success('首页标题已恢复默认')
+  themeStore.setBrowserTitle(DEFAULT_BROWSER_TITLE)
+  ElMessage.success('标题已恢复默认')
 }
+
+// is_superuser 是后加到用户序列化里的：老会话从 localStorage 恢复的 user 可能没这个字段，
+// 会导致管理员看不到配置卡。此时刷新一次用户资料。
+onMounted(async () => {
+  if (userStore.user && userStore.user.is_superuser === undefined) {
+    try {
+      await userStore.fetchProfile()
+    } catch (e) {
+      /* 失败按非管理员处理 */
+    }
+  }
+})
 
 const primaryPresets = [
   '#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#9b59b6',

@@ -322,9 +322,13 @@ def seed_builtin_skills(apps, schema_editor):
     TestCaseSkill = apps.get_model("requirement_analysis", "TestCaseSkill")
     User = apps.get_model("users", "User")
 
-    # 找一个可用用户作为 created_by，fallback 到任意管理员
+    # created_by 是 NOT NULL，全新库（例如测试库）里可能一个用户都没有。
+    # 原先无用户时硬编码 user_id=1，外键必然失败，会让整个 migrate / 测试库构建崩掉；
+    # 这里改为「没有用户就跳过种子写入」，等有管理员后再导入即可。
     admin = User.objects.filter(is_superuser=True).first() or User.objects.first()
-    user_id = admin.id if admin else 1
+    if admin is None:
+        return
+    user_id = admin.id
 
     with transaction.atomic():
         # 软更新：用 name 匹配，保留现有 id，避免外键断裂

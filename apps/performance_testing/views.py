@@ -387,23 +387,9 @@ class PerformanceExecutionViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         """删除执行记录时清理对应的 PERF_xxx 介质目录。"""
-        import shutil
+        from .cleanup import cleanup_execution_artifacts
 
-        base = None
-        for p in (instance.jtl_path, instance.jmx_path, instance.report_path, instance.jmeter_log):
-            if p and os.path.exists(p):
-                base = os.path.dirname(p) if os.path.isfile(p) else p
-                break
-        if (
-            base
-            and instance.execution_id
-            and instance.execution_id in base
-            and os.path.isdir(base)
-        ):
-            try:
-                shutil.rmtree(base)
-            except Exception:
-                logger.exception("删除执行介质目录失败 %s", base)
+        cleanup_execution_artifacts(instance)
         super().perform_destroy(instance)
 
     @action(detail=True, methods=["post"])

@@ -221,8 +221,11 @@ def seed_perf_skills(apps, schema_editor):
     TestCaseSkill = apps.get_model("requirement_analysis", "TestCaseSkill")
     User = apps.get_model("users", "User")
 
+    # 同 0021：created_by 为 NOT NULL，全新库里没有用户时必须跳过而不是硬编码 id
     admin = User.objects.filter(is_superuser=True).first() or User.objects.first()
-    user_id = admin.id if admin else 1
+    if admin is None:
+        return
+    user_id = admin.id
 
     with transaction.atomic():
         for data in PERF_SKILLS:

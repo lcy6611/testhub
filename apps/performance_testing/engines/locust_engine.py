@@ -29,14 +29,19 @@ from locust import HttpUser, task, events
 
 JTL_PATH = {jtl_path!r}
 STEPS = {steps!r}
+#: >0 表示「按循环次数跑」：达到该请求数即主动停止（users × loops × 每轮请求数）
+TARGET_REQUESTS = {target_requests!r}
 
 _fh = None
 _writer = None
+_env = None
+_count = 0
 
 
 @events.init.add_listener
 def _open_jtl(environment, **kwargs):
-    global _fh, _writer
+    global _fh, _writer, _env
+    _env = environment
     os.makedirs(os.path.dirname(JTL_PATH), exist_ok=True)
     _fh = open(JTL_PATH, "w", encoding="utf-8", newline="")
     _writer = csv.writer(_fh)
@@ -53,6 +58,7 @@ def _close_jtl(exit_code, **kwargs):
 
 @events.request.add_listener
 def _record(request_type, name, response_time, response_length, exception, **kwargs):
+    global _count
     if _writer is None:
         return
     code = ""
@@ -64,6 +70,12 @@ def _record(request_type, name, response_time, response_length, exception, **kwa
     _writer.writerow([int(time.time() * 1000), int(response_time or 0), name,
                       code, "true" if ok else "false", int(response_length or 0), 0])
     _fh.flush()
+
+    _count += 1
+    if TARGET_REQUESTS and _count >= TARGET_REQUESTS:
+        runner = getattr(_env, "runner", None)
+        if runner is not None:
+            runner.quit()
 
 
 class TestHubUser(HttpUser):
@@ -99,12 +111,23 @@ def is_available() -> bool:
 
 
 def get_version() -> str:
+    """取 locust 版本。
+
+    ⚠️ 这里**必须避免 import locust**：locust 导入时会做 gevent monkey-patching
+    （会警告 "Monkey-patching ssl after ssl has already been imported"），
+    而本函数会被引擎状态接口在 Web 服务进程（daphne）与测试进程里调用，
+    一旦污染主进程会破坏 Django 的线程内数据库连接管理
+    （表现为 DatabaseWrapper objects created in a thread can only be used in that same thread）。
+    改用 importlib.metadata 只读包元数据，不触发任何导入。
+    """
     if not is_available():
         return ""
     try:
-        from locust import __version__
+        from importlib.metadata import PackageNotFoundError, version
 
-        return str(__version__)
+        return version("locust")
+    except PackageNotFoundError:
+        return "unknown"
     except Exception:  # noqa: BLE001
         return "unknown"
 
@@ -127,19 +150,21 @@ class LocustEngine(BaseEngine):
     def run(self) -> Dict[str, Any]:
         self.prepare()
         steps = self._steps()
-        locustfile = os.path.join(self.work_dir, LOCUSTFILE_NAME)
-        os.makedirs(self.work_dir, exist_ok=True)
-        with open(locustfile, "w", encoding="utf-8") as f:
-            f.write(_LOCUSTFILE_TEMPLATE.format(jtl_path=self.jtl_path, steps=steps))
 
         users = max(1, int(self.run_opts.get("thread_count") or 1))
         ramp_up = max(1, int(self.run_opts.get("ramp_up") or 1))
         duration = max(1, int(self.run_opts.get("duration") or 60))
         host = self._host(steps[0].get("url") or "")
         loops = self.iterations()
-        if loops > 0:
-            # Locust 以「时长」为终止条件；指定循环次数时按每轮预估耗时折算时长
-            duration = min(duration, max(1, loops * len(steps)))
+        # 按循环次数跑：达到 users × loops × 每轮请求数 就由 locustfile 主动 quit；
+        # 此时 -t 仅作为兜底上限（避免异常情况下永不退出）。
+        target_requests = users * loops * len(steps) if loops > 0 else 0
+
+        locustfile = os.path.join(self.work_dir, LOCUSTFILE_NAME)
+        os.makedirs(self.work_dir, exist_ok=True)
+        with open(locustfile, "w", encoding="utf-8") as f:
+            f.write(_LOCUSTFILE_TEMPLATE.format(
+                jtl_path=self.jtl_path, steps=steps, target_requests=target_requests))
 
         cmd = [
             sys.executable, "-m", "locust", "-f", locustfile,

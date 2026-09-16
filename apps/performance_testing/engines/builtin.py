@@ -240,7 +240,10 @@ class BuiltinEngine(BaseEngine):
             recv = len(resp.content or b"")
             sent += len(str(resp.request.headers).encode("utf-8"))
             code = str(resp.status_code)
-            success = self._run_assertions(step.get("assertions") or [], resp)
+            # 与 JMeter/Locust 对齐：HTTP 4xx/5xx 默认记为失败样本（JMeter 也是按状态码判失败），
+            # 断言只能在此基础上再判失败，不能把错误码「洗白」成成功。
+            status_ok = resp.status_code < 400
+            success = status_ok and self._run_assertions(step.get("assertions") or [], resp)
         except Exception as exc:  # noqa: BLE001  网络异常记为失败样本
             elapsed = (time.time() - start) * 1000
             code = "0"

@@ -54,6 +54,7 @@ class PerformanceScriptSerializer(serializers.ModelSerializer):
     execution_count = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     script_type_display = serializers.CharField(source="get_script_type_display", read_only=True)
+    engine_display = serializers.CharField(source="get_engine_display", read_only=True)
     csv_files = PerformanceScriptCsvFileSerializer(many=True, read_only=True)
 
     class Meta:
@@ -68,6 +69,8 @@ class PerformanceScriptSerializer(serializers.ModelSerializer):
             "status_display",
             "script_type",
             "script_type_display",
+            "engine",
+            "engine_display",
             "jmx_config",
             "jmx_content",
             "jmx_file",
@@ -116,6 +119,8 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
     """性能测试执行记录。"""
 
     script_name = serializers.CharField(source="script.name", read_only=True)
+    script_engine = serializers.CharField(source="script.engine", read_only=True)
+    script_engine_display = serializers.CharField(source="script.get_engine_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     # 这两个是数据字段，get_*_display 需显式声明；status_display 用的是 source 写法
     sla_result_display = serializers.CharField(source="get_sla_result_display", read_only=True)
@@ -133,6 +138,8 @@ class PerformanceExecutionSerializer(serializers.ModelSerializer):
             "execution_id",
             "script",
             "script_name",
+            "script_engine",
+            "script_engine_display",
             "batch",
             "status",
             "status_display",

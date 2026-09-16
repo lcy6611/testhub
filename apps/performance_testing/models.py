@@ -25,6 +25,13 @@ class PerformanceScript(models.Model):
         ("published", "已发布"),
     ]
 
+    #: 压测引擎。默认 JMETER：保持既有脚本的历史行为不变
+    ENGINE_CHOICES = [
+        ("JMETER", "JMeter"),
+        ("BUILTIN", "内置引擎"),
+        ("LOCUST", "Locust"),
+    ]
+
     name = models.CharField(max_length=200, verbose_name="脚本名称")
     description = models.TextField(blank=True, default="", verbose_name="描述")
     projects = models.ManyToManyField(
@@ -53,6 +60,8 @@ class PerformanceScript(models.Model):
     duration = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
     # 实时报告开关
     realtime_enabled = models.BooleanField(default=False, verbose_name="启用实时报告")
+    # 压测引擎（默认 JMeter，保证历史脚本行为不变）
+    engine = models.CharField(max_length=16, choices=ENGINE_CHOICES, default="JMETER", verbose_name="压测引擎")
     # 验收目标（事后判定是否「通过」）：{max_p95_rt, max_avg_rt, min_tps, max_error_rate}
     perf_targets = models.JSONField(default=dict, blank=True, verbose_name="验收目标")
     # SLA 阈值（判定是否「违规」，支持运行期熔断）：

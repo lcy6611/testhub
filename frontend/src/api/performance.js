@@ -274,3 +274,9 @@ export function deleteEnvironment(id) {
 export function setActiveEnvironment(id) {
   return request({ url: `/performance-testing/environments/${id}/set-active/`, method: 'post' })
 }
+
+// ==================== 压测引擎 ====================
+
+export function getEngineStatus(force = false) {
+  return request({ url: '/performance-testing/engines/', method: 'get', params: force ? { force: 1 } : {} })
+}

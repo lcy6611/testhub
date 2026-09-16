@@ -6,6 +6,7 @@
         <div class="status-left">
           <el-tag :type="statusType(execution.status)" size="large">{{ execution.status_display }}</el-tag>
           <el-tag v-if="wsConnected" size="small" type="success" effect="plain">实时推送已连接</el-tag>
+          <el-tag v-if="execution.script_engine_display" size="small" effect="plain" type="info">{{ execution.script_engine_display }}</el-tag>
           <span class="exec-id">{{ execution.execution_id }}</span>
           <span class="script-name">{{ execution.script_name }}</span>
         </div>

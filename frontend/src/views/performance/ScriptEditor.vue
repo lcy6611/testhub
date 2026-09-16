@@ -211,6 +211,29 @@
               </div>
             </el-card>
 
+            <!-- 压测引擎：不可用的引擎置灰并提示依赖 -->
+            <el-card class="section-card" shadow="never">
+              <div class="section-header">
+                <div class="section-title">压测引擎</div>
+                <el-button link size="small" @click="loadEngineStatus">
+                  <el-icon><Refresh /></el-icon>刷新状态
+                </el-button>
+              </div>
+              <el-radio-group v-model="form.engine">
+                <el-radio-button
+                  v-for="eng in engineOptions"
+                  :key="eng.name"
+                  :label="eng.name"
+                  :disabled="!eng.available"
+                >
+                  {{ eng.label }}
+                </el-radio-button>
+              </el-radio-group>
+              <div class="help-text" style="margin-top:8px">
+                {{ currentEngineDesc }}
+              </div>
+            </el-card>
+
             <!-- 验收目标与 SLA 阈值（执行结束后自动判定） -->
             <el-card class="section-card" shadow="never">
               <div class="section-header">
@@ -543,7 +566,7 @@ import {
 } from '@element-plus/icons-vue'
 import {
   getScripts, getScript, createScript, updateScript, deleteScript,
-  executeScript, checkJmx, importJmx, exportJmx as exportJmxApi, getProjects, getLoadLimits, getEnvironments,
+  executeScript, checkJmx, importJmx, exportJmx as exportJmxApi, getProjects, getLoadLimits, getEnvironments, getEngineStatus,
   parseJmxToOnline,
   uploadScriptCsvFiles, getScriptCsvFiles, deleteScriptCsvFile
 } from '@/api/performance'
@@ -626,6 +649,7 @@ const form = reactive({
   ramp_up: 10,
   duration: 60,
   realtime_enabled: false,
+  engine: 'JMETER',
   perf_targets: defaultPerfTargets(),
   sla_config: defaultSlaConfig()
 })
@@ -687,6 +711,7 @@ async function selectScript(id) {
       ramp_up: d.ramp_up || 10,
       duration: d.duration || 60,
       realtime_enabled: d.realtime_enabled || false,
+      engine: d.engine || 'JMETER',
       perf_targets: { ...defaultPerfTargets(), ...(d.perf_targets || {}) },
       sla_config: {
         ...defaultSlaConfig(),
@@ -737,6 +762,7 @@ function createNewScript() {
     ramp_up: 10,
     duration: 60,
     realtime_enabled: false,
+    engine: 'JMETER',
     perf_targets: defaultPerfTargets(),
     sla_config: defaultSlaConfig()
   })
@@ -1006,6 +1032,7 @@ async function handleSave(opts = {}) {
     formData.append('ramp_up', String(form.ramp_up))
     formData.append('duration', String(form.duration))
     formData.append('realtime_enabled', String(form.realtime_enabled))
+    formData.append('engine', form.engine || 'JMETER')
     formData.append('perf_targets', JSON.stringify(form.perf_targets || {}))
     formData.append('sla_config', JSON.stringify(form.sla_config || {}))
 
@@ -1039,6 +1066,26 @@ async function handleSave(opts = {}) {
   } finally {
     saving.value = false
   }
+}
+
+// ── 压测引擎状态（不可用引擎置灰）──
+const engineOptions = ref([
+  { name: 'JMETER', label: 'JMeter', available: true, description: '' },
+  { name: 'BUILTIN', label: '内置引擎', available: true, description: '' },
+  { name: 'LOCUST', label: 'Locust', available: false, description: '' },
+])
+const currentEngineDesc = computed(() => {
+  const hit = engineOptions.value.find((e) => e.name === form.engine)
+  if (!hit) return ''
+  return hit.available ? hit.description : `不可用：${hit.description}`
+})
+
+async function loadEngineStatus() {
+  try {
+    const res = await getEngineStatus(true)
+    const list = res.data?.engines || []
+    if (list.length) engineOptions.value = list
+  } catch (e) { /* 保持默认，避免阻塞编辑 */ }
 }
 
 const execDialogVisible = ref(false)
@@ -1103,6 +1150,7 @@ async function confirmExecute() {
 }
 
 onMounted(() => {
+  loadEngineStatus()
   loadProjects()
   if (route.query.project) {
     const pid = Number(route.query.project)

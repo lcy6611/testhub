@@ -1344,3 +1344,15 @@ class PerformanceEnvironmentViewSet(viewsets.ModelViewSet):
         # 触发互斥清理
         env.save()
         return Response(PerformanceEnvironmentSerializer(env).data)
+
+
+class PerformanceEngineViewSet(viewsets.ViewSet):
+    """压测引擎状态：前端据此置灰不可用引擎，执行前据此拦截。"""
+
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        from . import engines as perf_engines
+
+        force = request.query_params.get("force") in ("1", "true", "yes")
+        return Response({"engines": perf_engines.engine_status(force=force)})

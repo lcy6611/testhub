@@ -26,6 +26,7 @@ from .models import (
 from .jmx_builder import JMeterPlanBuilder, UploadedJMXPlanBuilder
 from .result_parser import parse_jtl
 from .influxdb_client import query_realtime, is_enabled as realtime_enabled
+from . import engines as perf_engines
 
 logger = logging.getLogger(__name__)
 
@@ -310,28 +311,64 @@ def execute(execution_id: str) -> None:
 
         PerformanceExecution.objects.filter(pk=execution.pk).update(jmx_path=jmx_path, jtl_path=jtl_path)
 
-        # 3. JMeter non-GUI 执行
-        jm_cmd = _jmeter_command()
-        run_cmd = [jm_cmd, "-n", "-t", jmx_path, "-l", jtl_path, "-j", log_path]
-        logger.info("执行 JMeter: %s", " ".join(run_cmd))
-        timeout = execution.duration + execution.ramp_up + 300
-        proc = subprocess.run(
-            run_cmd, capture_output=True, text=True, timeout=timeout,
-            cwd=work_dir,
-        )
-        jmeter_log = ""
-        try:
-            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                jmeter_log = f.read()[-20000:]
-        except Exception:
-            pass
-
-        if proc.returncode != 0 and not os.path.exists(jtl_path):
-            PerformanceExecution.objects.filter(pk=execution.pk).update(
-                jmeter_log=jmeter_log, error_message=f"JMeter 执行失败(returncode={proc.returncode}): {proc.stderr[:1000]}",
+        # 3. 执行：JMeter 走原有子进程链路；其余引擎交给引擎类
+        #    （BUILTIN / LOCUST 的产物同样是 CSV JTL，故第 4 步之后完全复用）
+        engine_name = perf_engines.normalize(getattr(script, "engine", None))
+        if engine_name == "JMETER":
+            # 3.1 JMeter non-GUI 执行
+            jm_cmd = _jmeter_command()
+            run_cmd = [jm_cmd, "-n", "-t", jmx_path, "-l", jtl_path, "-j", log_path]
+            logger.info("执行 JMeter: %s", " ".join(run_cmd))
+            timeout = execution.duration + execution.ramp_up + 300
+            proc = subprocess.run(
+                run_cmd, capture_output=True, text=True, timeout=timeout,
+                cwd=work_dir,
             )
-            _fail(f"JMeter 执行失败 (returncode={proc.returncode})")
-            return
+            jmeter_log = ""
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                    jmeter_log = f.read()[-20000:]
+            except Exception:
+                pass
+
+            if proc.returncode != 0 and not os.path.exists(jtl_path):
+                PerformanceExecution.objects.filter(pk=execution.pk).update(
+                    jmeter_log=jmeter_log, error_message=f"JMeter 执行失败(returncode={proc.returncode}): {proc.stderr[:1000]}",
+                )
+                _fail(f"JMeter 执行失败 (returncode={proc.returncode})")
+                return
+        else:
+            # 3.2 内置 / Locust 引擎
+            try:
+                engine_cls = perf_engines.get_engine_class(engine_name)
+                try:
+                    loops = int(((effective_config.get("thread_groups") or [{}])[0] or {}).get("loops") or 0)
+                except Exception:
+                    loops = 0
+                engine = engine_cls(
+                    effective_config,
+                    {
+                        "thread_count": execution.thread_count,
+                        "ramp_up": execution.ramp_up,
+                        "duration": execution.duration,
+                        "loops": loops,
+                    },
+                    work_dir,
+                    on_log=lambda m: logger.info("[%s] %s", engine_name, m),
+                )
+                engine_result = engine.run() or {}
+                jmeter_log = str(engine_result.get("log") or "")[-20000:]
+                if engine_result.get("returncode") not in (0, None) and not os.path.exists(jtl_path):
+                    PerformanceExecution.objects.filter(pk=execution.pk).update(
+                        jmeter_log=jmeter_log,
+                        error_message=f"{engine_name} 引擎执行失败",
+                    )
+                    _fail(f"{engine_name} 引擎执行失败：{jmeter_log[:500]}")
+                    return
+            except Exception as exc:  # noqa: BLE001  引擎异常按执行失败处理
+                logger.exception("引擎执行异常 %s", execution_id)
+                _fail(f"{engine_name} 引擎执行异常：{exc}")
+                return
 
         PerformanceExecution.objects.filter(pk=execution.pk).update(jmeter_log=jmeter_log)
 
@@ -423,11 +460,13 @@ def execute(execution_id: str) -> None:
         # 7. HTML 报告（执行结束即自动生成，无需进详情页手动「重新生成报告」）
         try:
             os.makedirs(report_dir, exist_ok=True)
-            # 7.1 JMeter 原生报告
-            subprocess.run(
-                [jm_cmd, "-g", jtl_path, "-o", report_dir],
-                capture_output=True, text=True, timeout=180, cwd=work_dir,
-            )
+            # 7.1 JMeter 原生报告：只有 JMeter 引擎才有这一步
+            #     （务必重新取命令而不要复用 3.1 分支里的局部变量，否则非 JMeter 引擎会 NameError）
+            if engine_name == "JMETER":
+                subprocess.run(
+                    [_jmeter_command(), "-g", jtl_path, "-o", report_dir],
+                    capture_output=True, text=True, timeout=180, cwd=work_dir,
+                )
             # 7.2 自定义 TestHub 报告（独立 HTML，内置 CDN 资源，避免 iframe 路径问题）
             from .report_generator import generate_html_report
             jmeter_index = os.path.join(report_dir, "index.html")

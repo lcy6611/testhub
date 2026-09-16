@@ -174,7 +174,9 @@
                   <el-icon><Plus /></el-icon>添加变量
                 </el-button>
               </div>
-              <div class="help-text">TestPlan 级变量池，可在 URL、参数和请求体中使用，例如 {{ base_url }} 或 JMeter 原生 ${base_url}</div>
+              <!-- v-pre：文案里的 {{ base_url }} 是给用户看的示例，不加 v-pre 会被 Vue 当插值
+                   解析（控制台报 "Property base_url was accessed during render"，且示例显示为空） -->
+              <div class="help-text" v-pre>TestPlan 级变量池，可在 URL、参数和请求体中使用，例如 {{ base_url }} 或 JMeter 原生 ${base_url}</div>
               <div v-for="(v, idx) in form.variables" :key="idx" class="variable-row">
                 <el-input v-model="v.name" placeholder="变量名" style="width:180px" />
                 <el-input v-model="v.value" placeholder="变量值" style="flex:1" />

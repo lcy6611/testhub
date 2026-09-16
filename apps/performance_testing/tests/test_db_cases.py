@@ -1,26 +1,22 @@
-# -*- coding: utf-8 -*-
 """需要数据库的用例（分享直链 / WebSocket 鉴权 / 清理命令 / 环境互斥）。
 
-⚠️ 为什么文件名不以 ``test`` 开头（即不参与 ``manage.py test`` 的自动发现）：
+运行方式与其他测试一致，无需额外参数：
 
-   本平台**全新数据库**上的迁移链目前跑不通（既有问题，与本模块无关）：
-   1. ``requirement_analysis/0021、0022`` 种子迁移在库中没有任何用户时硬编码
-      ``created_by_id = 1``，外键必然失败（本次已顺手修好）；
-   2. ``ui_automation`` 有迁移要删除仍被外键引用的列 ``ai_suite_id``，仍然失败。
+    python manage.py test apps.performance_testing.tests --noinput
+    # 或只跑本模块
+    python manage.py test apps.performance_testing.tests.test_db_cases --noinput
 
-   只要被发现的测试集合里存在任何 ``TestCase``，Django 就会去建测试库，
-   从而整个测试套件被上面两个问题带崩。因此把这些用例单独放到本文件，
-   让纯逻辑用例照常自动发现并保持全绿。
+历史备注：本文件曾名为 ``db_requiring_cases.py``（故意不以 test 开头、不参与自动发现），
+原因是当时平台**全新数据库的迁移链跑不通**，任何 TestCase 都会触发建测试库、
+进而把整个套件带崩。相关迁移问题已修复：
 
-   待平台迁移链修好后，显式运行本文件即可（用例本身是完整可用的）：
+- ``requirement_analysis/0021、0022`` 种子迁移在库中无用户时硬编码 ``created_by_id=1``
+  → 改为无用户则跳过种子写入；
+- ``ui_automation/0009`` 删列前未摘外键（MySQL 1828），且裸 SQL 硬编码
+  ``auth_user`` 与 ``int`` 类型（本项目用 ``users_user`` + ``bigint``，报 1824）
+  → 改为先摘外键再删列，表名与 FK 列类型按项目配置动态推导。
 
-       python manage.py test apps.performance_testing.tests.db_requiring_cases --noinput
-       # 也可以只跑其中一个类
-       python manage.py test apps.performance_testing.tests.db_requiring_cases.ShareEndpointTests --noinput
-
-   在迁移链修好之前，可临时用「克隆开发库结构 + --keepdb」绕过（本模块 23 个用例已用此法
-   验证为全绿）：先把开发库的表结构与 ``django_migrations`` 记录复制到 ``test_<库名>``，
-   再执行上面命令并加 ``--keepdb``。因为迁移记录已齐全，migrate 会成为空操作。
+现在已恢复正常自动发现。
 """
 from datetime import timedelta
 

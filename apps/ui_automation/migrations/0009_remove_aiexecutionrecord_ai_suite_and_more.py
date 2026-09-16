@@ -19,6 +19,26 @@ def drop_columns_if_exist(apps, schema_editor):
             )
             return cursor.fetchone() is not None
 
+        def drop_foreign_keys(table, column):
+            """删列前必须先摘掉该列上的外键，否则 MySQL 报 1828
+            （Cannot drop column ... needed in a foreign key constraint）。
+
+            全新库上 ai_suite_id 的外键仍然存在，就是靠这一步才能删掉。
+            """
+            cursor.execute(
+                """
+                SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s
+                  AND REFERENCED_TABLE_NAME IS NOT NULL
+                """,
+                [table, column],
+            )
+            for (constraint_name,) in cursor.fetchall():
+                cursor.execute("ALTER TABLE %s DROP FOREIGN KEY %s" % (
+                    schema_editor.quote_name(table),
+                    schema_editor.quote_name(constraint_name),
+                ))
+
         drops = [
             ("ui_ai_execution_records", "ai_suite_id"),
             ("ui_ai_execution_records", "execution_history"),
@@ -30,6 +50,7 @@ def drop_columns_if_exist(apps, schema_editor):
         ]
         for table, column in drops:
             if column_exists(table, column):
+                drop_foreign_keys(table, column)
                 cursor.execute("ALTER TABLE %s DROP COLUMN %s" % (
                     schema_editor.quote_name(table),
                     schema_editor.quote_name(column),
@@ -37,7 +58,14 @@ def drop_columns_if_exist(apps, schema_editor):
 
 
 def create_ui_notification_configs_if_not_exists(apps, schema_editor):
-    """若表已存在（迁移曾部分执行），则跳过建表，避免 1050。"""
+    """若表已存在（迁移曾部分执行），则跳过建表，避免 1050。
+
+    注意：这段裸 SQL 必须按**本项目实际配置**推导，不能写死。历史版本写死了
+    ``created_by_id int ... REFERENCES auth_user (id)``：在「表已存在」的库上会被
+    上面的早退分支跳过而看不出问题，一旦在全新库上真正执行，就会报 1824
+    （auth_user 不存在，本项目用户表是 users_user）；FK 列类型也必须与用户表主键
+    一致（本项目 BigAutoField → bigint），否则报 3780。
+    """
     conn = schema_editor.connection
     with conn.cursor() as cursor:
         cursor.execute(
@@ -48,6 +76,13 @@ def create_ui_notification_configs_if_not_exists(apps, schema_editor):
         )
         if cursor.fetchone() is not None:
             return
+
+        user_model = apps.get_model(*settings.AUTH_USER_MODEL.split("."))
+        user_table = schema_editor.quote_name(user_model._meta.db_table)
+        user_pk_column = schema_editor.quote_name(user_model._meta.pk.column)
+        # BigAutoField/AutoField → bigint/int，保证与用户表主键类型一致（否则报 3780）
+        pk_type = "bigint" if user_model._meta.pk.get_internal_type() == "BigAutoField" else "int"
+
         cursor.execute(
             """
             CREATE TABLE ui_notification_configs (
@@ -59,11 +94,11 @@ def create_ui_notification_configs_if_not_exists(apps, schema_editor):
                 is_active tinyint(1) NOT NULL DEFAULT 1,
                 created_at datetime(6) NOT NULL,
                 updated_at datetime(6) NOT NULL,
-                created_by_id int NOT NULL,
+                created_by_id %s NOT NULL,
                 CONSTRAINT ui_notification_configs_created_by_id_fk
-                    FOREIGN KEY (created_by_id) REFERENCES auth_user (id)
+                    FOREIGN KEY (created_by_id) REFERENCES %s (%s)
             )
-            """
+            """ % (pk_type, user_table, user_pk_column)
         )
 
 
